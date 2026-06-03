@@ -1,0 +1,30 @@
+# Local tool configuration
+.claude/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# Keil / MDK generated files
+MDK-ARM/ZDT_Motor/
+MDK-ARM/*.lst
+MDK-ARM/JLinkLog.txt
+*.uvguix.*
+*.o
+*.d
+*.crf
+*.axf
+*.elf
+*.hex
+*.bin
+*.map
+*.lnp
+*.dep
+*.htm
+*.build_log.htm
+
+# Backup files
+*.bak
+*.orig
