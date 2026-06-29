@@ -2,8 +2,11 @@
  * @file    system_assembly.c
  * @brief   系统组装根：CMSIS-OS2 包装 + RX 蹦床 + 电机子系统装配
  * @author  haoyu
- * @note    - 这里是全工程唯一把 OS（CMSIS-OS2/FreeRTOS）注入 BSP handler 的地方
- *          - 装配顺序：adp_init → mh_inst → mh_start → adp_start → 使能 → 上报
+ * @note    - 全工程唯一把 OS（CMSIS-OS2/FreeRTOS）注入 BSP
+ *            handler 之处
+ *          - 装配顺序：adp_init → mh_inst → mh_on_event →
+ *            mh_start → adp_start → hwt101 → 上电握手放行
+ *          - 上电握手：全部电机回上报帧才放行，杜绝裸跑，与顺序无关
  *          - 工程 tick = 1kHz，故 tick 数与 ms 一一对应
  */
 
@@ -23,18 +26,25 @@
 #if SYS_ASM_LOG_EN
 #include "cat_log.h"
 #define SYS_LOGI(fmt, ...)  LOGI("[sys] " fmt, ##__VA_ARGS__)
+#define SYS_LOGW(fmt, ...)  LOGW("[sys] " fmt, ##__VA_ARGS__)
 #define SYS_LOGE(fmt, ...)  LOGE("[sys] " fmt, ##__VA_ARGS__)
 #else
 #define SYS_LOGI(fmt, ...)  do {} while (0)
+#define SYS_LOGW(fmt, ...)  do {} while (0)
 #define SYS_LOGE(fmt, ...)  do {} while (0)
 #endif
 
-#define SYS_MOTOR_REPORT_MS   2U     /* 电机位置上报周期 ms（里程计数据源） */
-#define SYS_MH_STACK_BYTES    2048U  /* 收发线程栈：解析 + RTT 日志够用 */
+#define SYS_MOTOR_REPORT_MS   2U     /* 位置上报周期 ms */
+#define SYS_MH_STACK_BYTES    2048U  /* 收发线程栈，含日志 */
+#define SYS_HANDSHAKE_POLL_MS 150U   /* 上电握手轮询间隔 ms */
 
 /* ---- 被注入的对象 ---- */
-static motor_handler_t g_motor_handler;   /* 电机总线 handler（一条命令总线）*/
+static motor_handler_t g_motor_handler;   /* 命令总线 handler */
 static uint8_t         g_assembled = 0U;  /* 组装完成标志 */
+
+/* ---- 上电握手就绪标志（RX 钩子置位；使能与上报分开记） ---- */
+static volatile uint8_t g_enabled[ZDT_ADP_MOTOR_NUM];   /* 收应答 */
+static volatile uint8_t g_reporting[ZDT_ADP_MOTOR_NUM]; /* 收上报 */
 
 /* ---- CMSIS-OS2：线程 ---- */
 
@@ -106,7 +116,8 @@ static zdt_status_t os_queue_put(void *q, const void *item,
     if ((q == NULL) || (item == NULL)) {
         return ZDT_ERR_PARAM;
     }
-    if (osMessageQueuePut((osMessageQueueId_t)q, item, 0U, timeout_ms) != osOK) {
+    if (osMessageQueuePut((osMessageQueueId_t)q, item,
+                          0U, timeout_ms) != osOK) {
         return ZDT_ERR_RES;
     }
     return ZDT_OK;
@@ -117,14 +128,16 @@ static zdt_status_t os_queue_put(void *q, const void *item,
  * @param  q          队列句柄
  * @param  item       输出缓冲
  * @param  timeout_ms 超时 ms（MH_WAIT_FOREVER 即 osWaitForever）
- * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_RES（超时/空时线程据此重试）
+ * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_RES（超时即重试）
  */
-static zdt_status_t os_queue_get(void *q, void *item, uint32_t timeout_ms)
+static zdt_status_t os_queue_get(void *q, void *item,
+                                 uint32_t timeout_ms)
 {
     if ((q == NULL) || (item == NULL)) {
         return ZDT_ERR_PARAM;
     }
-    if (osMessageQueueGet((osMessageQueueId_t)q, item, NULL, timeout_ms) != osOK) {
+    if (osMessageQueueGet((osMessageQueueId_t)q, item,
+                          NULL, timeout_ms) != osOK) {
         return ZDT_ERR_RES;
     }
     return ZDT_OK;
@@ -161,10 +174,13 @@ static void os_lock_exit(void)
 
 /* ---- 注入接口实例 ---- */
 static const mh_os_thread_t g_os_thread = { os_thread_new };
-static const mh_os_queue_t  g_os_queue  = { os_queue_new, os_queue_put,
+static const mh_os_queue_t  g_os_queue  = { os_queue_new,
+                                            os_queue_put,
                                             os_queue_get };
-static const mh_os_time_t   g_os_time   = { os_delay_ms, os_get_tick };
-static const mh_os_lock_t   g_os_lock   = { os_lock_enter, os_lock_exit };
+static const mh_os_time_t   g_os_time   = { os_delay_ms,
+                                            os_get_tick };
+static const mh_os_lock_t   g_os_lock   = { os_lock_enter,
+                                            os_lock_exit };
 
 /**
  * @brief  RX 蹦床：适配层 ISR 回调签名 → handler 入队接口
@@ -173,16 +189,56 @@ static const mh_os_lock_t   g_os_lock   = { os_lock_enter, os_lock_exit };
  * @param  len   帧长度
  * @note   ISR 上下文，仅做一次非阻塞入队
  */
-static void motor_rx_trampoline(zdt_motor_t *motor, const uint8_t *data,
-                                uint16_t len)
+static void motor_rx_trampoline(zdt_motor_t *motor,
+                                const uint8_t *data, uint16_t len)
 {
     (void)mh_feed_rx(&g_motor_handler, motor, data, len);
 }
 
+/**
+ * @brief  电机 RX 事件钩子：按帧类型置位就绪标志 + RTT 日志
+ * @param  ctx 钩子上下文（本层未用）
+ * @param  idx 来源电机槽位
+ * @param  rx  解析结果（kind / code / pulse）
+ * @note   RX 线程上下文，仅置标志 + 轻量日志，勿阻塞
+ */
+static void motor_evt_cb(void *ctx, uint8_t idx, const zdt_rx_t *rx)
+{
+    (void)ctx;
+    // 0.空指针与越界保护
+    if ((rx == NULL) || (idx >= ZDT_ADP_MOTOR_NUM)) {
+        return;
+    }
+    // 1.按帧类型置位就绪标志（使能与上报分开记）/ 记录异常
+    switch (rx->kind) {
+    case ZDT_RX_ACK:
+        g_enabled[idx] = 1U;    /* 命令应答：使能等已被电机接收 */
+        break;
+    case ZDT_RX_POS:
+        if (g_reporting[idx] == 0U) {
+            SYS_LOGI("m%u reporting (closed-loop up)", (unsigned)idx);
+        }
+        g_reporting[idx] = 1U;  /* 收到位置上报：闭环确实在跑 */
+        break;
+    case ZDT_RX_DONE:
+        SYS_LOGI("m%u done code=0x%02X",
+                 (unsigned)idx, (unsigned)rx->code);
+        break;
+    case ZDT_RX_PARAM_ERR:
+    case ZDT_RX_FMT_ERR:
+        SYS_LOGE("m%u motor err kind=%d",
+                 (unsigned)idx, (int)rx->kind);
+        break;
+    default:
+        break;
+    }
+}
+
 zdt_status_t system_assembly_init(void)
 {
-    zdt_status_t ret = ZDT_ERR; /* 步骤结果 */
-    uint8_t i = 0U;            /* 电机下标 */
+    zdt_status_t ret = ZDT_ERR;  /* 步骤结果 */
+    uint8_t      i = 0U;         /* 电机下标 */
+    uint8_t      pending = 0U;   /* 未就绪电机数 */
 
     /* 1) 平台适配：建电机/组 + 注入 HAL 收发，RX 回调指向蹦床 */
     ret = zdt_adp_init(motor_rx_trampoline);
@@ -191,39 +247,32 @@ zdt_status_t system_assembly_init(void)
         return ret;
     }
     /* 2) 实例化 handler：绑定总线 + 注入 OS 接口 */
-    ret = mh_inst(&g_motor_handler, zdt_adp_group(), &g_os_thread, &g_os_queue,
-                 &g_os_time, &g_os_lock, MH_GAP_MS_MIN);
+    ret = mh_inst(&g_motor_handler, zdt_adp_group(),
+                  &g_os_thread, &g_os_queue, &g_os_time,
+                  &g_os_lock, MH_GAP_MS_MIN);
     if (ret != ZDT_OK) {
         SYS_LOGE("mh_inst fail=%d", (int)ret);
         return ret;
     }
-    /* 3) 起 TX/RX 线程与队列 */
+    /* 3) 注册 RX 事件钩子：电机应答经它上抛并置位就绪标志 */
+    ret = mh_on_event(&g_motor_handler, motor_evt_cb, NULL);
+    if (ret != ZDT_OK) {
+        SYS_LOGE("mh_on_event fail=%d", (int)ret);
+        return ret;
+    }
+    /* 4) 起 TX/RX 线程与队列（钩子已就位） */
     ret = mh_start(&g_motor_handler);
     if (ret != ZDT_OK) {
         SYS_LOGE("mh_start fail=%d", (int)ret);
         return ret;
     }
-    /* 4) 仅启动各路 RX（使能 / 上报作为 TX 经 handler 串行下发） */
+    /* 5) 仅启动各路 RX（使能 / 上报作为 TX 经 handler 串行下发） */
     ret = zdt_adp_start();
     if (ret != ZDT_OK) {
         SYS_LOGE("adp_start fail=%d", (int)ret);
         return ret;
     }
-    /* 5) 逐个使能板载电机 */
-    for (i = 0U; i < ZDT_ADP_MOTOR_NUM; i++) {
-        ret = mh_enable(&g_motor_handler, i, true);
-        if (ret != ZDT_OK) {
-            SYS_LOGE("mh_enable[%u] fail=%d", (unsigned)i, (int)ret);
-            return ret;
-        }
-    }
-    /* 6) 开启定时上报（里程计数据源） */
-    ret = mh_report(&g_motor_handler, SYS_MOTOR_REPORT_MS);
-    if (ret != ZDT_OK) {
-        SYS_LOGE("mh_report fail=%d", (int)ret);
-        return ret;
-    }
-    /* 7) 陀螺仪：装配 + 启动 DMA 接收（里程计 yaw 数据源） */
+    /* 6) 陀螺仪：装配 + 启动 DMA 接收（不阻塞，先于握手做完） */
     if (hwt101_adp_init() != HWT101_OK) {
         SYS_LOGE("hwt101 init fail");
         return ZDT_ERR;
@@ -232,9 +281,29 @@ zdt_status_t system_assembly_init(void)
         SYS_LOGE("hwt101 start fail");
         return ZDT_ERR;
     }
+    /* 7) 上电握手：一直重发使能 + 上报，待所有电机回上报帧才放行；
+     *    电机晚于板子上电也会被纳管，闭环建立前不放行以杜绝裸跑
+     */
+    for (;;) {
+        pending = 0U;
+        for (i = 0U; i < ZDT_ADP_MOTOR_NUM; i++) {
+            if (g_reporting[i] != 0U) {
+                continue; /* 该电机闭环已建立 */
+            }
+            pending++;
+            (void)mh_enable(&g_motor_handler, i, true);
+        }
+        (void)mh_report(&g_motor_handler, SYS_MOTOR_REPORT_MS);
+        if (pending == 0U) {
+            break; /* 全部电机就绪，放行 */
+        }
+        SYS_LOGW("waiting handshake: %u motors", (unsigned)pending);
+        (void)osDelay(SYS_HANDSHAKE_POLL_MS); /* 让 TX/RX 跑完一轮 */
+    }
     g_assembled = 1U;
-    SYS_LOGI("subsystems up: %u motors (report %ums) + hwt101",
-             (unsigned)ZDT_ADP_MOTOR_NUM, (unsigned)SYS_MOTOR_REPORT_MS);
+    SYS_LOGI("all motors ready: %u motors (report %ums) + hwt101",
+             (unsigned)ZDT_ADP_MOTOR_NUM,
+             (unsigned)SYS_MOTOR_REPORT_MS);
     return ZDT_OK;
 }
 

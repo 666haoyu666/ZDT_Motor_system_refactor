@@ -32,8 +32,8 @@ extern "C" {
 #define MAP_USE_H_CACHE     1U       /* 1=缓存启发值（费 RAM 提速），0=每次现算 */
 
 /* ---- 世界系→地图系原点偏移（原 CHASSIS_PATH_TARGET_OFFSET_X/Y） ---- */
-#define MAP_ORIGIN_X_MM     1200     /* 世界系原点落在地图系的 x，单位 mm */
-#define MAP_ORIGIN_Y_MM     350      /* 世界系原点落在地图系的 y，单位 mm */
+#define MAP_ORIGIN_X_MM     0     /* 世界系原点落在地图系的 x，单位 mm */
+#define MAP_ORIGIN_Y_MM     0      /* 世界系原点落在地图系的 y，单位 mm */
 
 #ifdef __cplusplus
 }

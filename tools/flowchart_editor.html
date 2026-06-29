@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>模块流程图编辑器</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f6f4;
+      --ink: #18231e;
+      --muted: #64716a;
+      --line: #ccd7d1;
+      --panel: #ffffff;
+      --field: #f7faf8;
+      --green: #dcefd9;
+      --green-line: #91bd84;
+      --cream: #fff2c8;
+      --cream-line: #e0c45b;
+      --rose: #f8cdcd;
+      --rose-line: #e08282;
+      --accent: #176f5a;
+      --accent-strong: #105241;
+      --danger: #b93737;
+      --blue: #2d6f9f;
+      --shadow: 0 14px 34px rgba(24, 35, 30, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button,
+    select,
+    input,
+    textarea {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+    }
+
+    button {
+      min-height: 36px;
+      cursor: pointer;
+      padding: 8px 11px;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    button.primary:hover {
+      background: var(--accent-strong);
+    }
+
+    button.danger {
+      border-color: #e8bbbb;
+      color: var(--danger);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px 10px;
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(680px, 1fr) 340px;
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .workspace,
+    .sidebar {
+      min-width: 0;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 24px;
+    }
+
+    h2 {
+      font-size: 15px;
+    }
+
+    .actions,
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .canvas-shell {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(90deg, rgba(23, 111, 90, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(23, 111, 90, 0.05) 1px, transparent 1px),
+        #ffffff;
+      background-size: 24px 24px;
+      box-shadow: var(--shadow);
+    }
+
+    svg {
+      display: block;
+      width: 1220px;
+      height: 940px;
+      user-select: none;
+    }
+
+    .band {
+      stroke-width: 2;
+    }
+
+    .divider {
+      stroke-width: 2;
+    }
+
+    .section-title {
+      fill: #050807;
+      font-size: 52px;
+      font-weight: 500;
+      pointer-events: none;
+    }
+
+    .node rect {
+      fill: #ffffff;
+      stroke: #242a28;
+      stroke-width: 2;
+      rx: 0;
+    }
+
+    .node text {
+      fill: #1f2724;
+      font-size: 20px;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      pointer-events: none;
+    }
+
+    .node.selected rect {
+      stroke: var(--blue);
+      stroke-width: 4;
+      filter: drop-shadow(0 8px 10px rgba(45, 111, 159, 0.18));
+    }
+
+    .node.dragging rect {
+      stroke: var(--accent);
+    }
+
+    .edge {
+      fill: none;
+      stroke: #111816;
+      stroke-width: 2.5;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+    }
+
+    .edge.selected {
+      stroke: var(--blue);
+      stroke-width: 4;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 10px 26px rgba(24, 35, 30, 0.06);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 12px 0;
+    }
+
+    .panel-body {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    label span {
+      line-height: 1.25;
+    }
+
+    .node-list {
+      display: grid;
+      gap: 6px;
+      max-height: 190px;
+      overflow: auto;
+    }
+
+    .node-list button {
+      display: grid;
+      min-height: 38px;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+    }
+
+    .node-list button.active {
+      border-color: var(--accent);
+      background: #edf7f2;
+    }
+
+    .node-list small {
+      color: var(--muted);
+    }
+
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .status {
+      min-height: 22px;
+      color: var(--accent-strong);
+      font-size: 13px;
+    }
+
+    .hidden-file {
+      display: none;
+    }
+
+    @media (max-width: 1080px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      svg {
+        width: 1100px;
+        height: 848px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 10px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="workspace">
+      <div class="topbar">
+        <div>
+          <h1>模块流程图编辑器</h1>
+          <p class="hint">单击节点或连线后在右侧修改；拖动节点调整位置；双击节点可以直接改文字。</p>
+        </div>
+        <div class="actions">
+          <button class="primary" id="saveBtn" type="button">保存</button>
+          <button id="exportPngBtn" type="button">导出 PNG</button>
+          <button id="exportSvgBtn" type="button">导出 SVG</button>
+        </div>
+      </div>
+
+      <div class="canvas-shell" id="canvasShell">
+        <svg id="chart" viewBox="0 0 1220 940" role="img" aria-label="任务模块、传感器模块和底层运动模块流程图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#111816"></path>
+            </marker>
+            <marker id="arrowBlue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#2d6f9f"></path>
+            </marker>
+          </defs>
+          <g id="bandsLayer"></g>
+          <g id="edgesLayer"></g>
+          <g id="nodesLayer"></g>
+        </svg>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>节点</h2>
+          <button id="addNodeBtn" type="button">新增节点</button>
+        </div>
+        <div class="panel-body">
+          <div class="node-list" id="nodeList"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>编辑选中项</h2>
+          <button class="danger" id="deleteBtn" type="button">删除</button>
+        </div>
+        <div class="panel-body">
+          <label>
+            <span>节点文字</span>
+            <textarea id="labelInput" placeholder="选择节点后编辑"></textarea>
+          </label>
+          <div class="field-grid">
+            <label>
+              <span>X</span>
+              <input id="xInput" type="number" step="1">
+            </label>
+            <label>
+              <span>Y</span>
+              <input id="yInput" type="number" step="1">
+            </label>
+            <label>
+              <span>宽度</span>
+              <input id="wInput" type="number" min="70" step="1">
+            </label>
+            <label>
+              <span>高度</span>
+              <input id="hInput" type="number" min="40" step="1">
+            </label>
+          </div>
+          <label>
+            <span>所属模块</span>
+            <select id="bandInput"></select>
+          </label>
+          <p class="hint" id="selectionHint">还没有选中节点或连线。</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>连线</h2>
+          <button id="addEdgeBtn" type="button">新增连线</button>
+        </div>
+        <div class="panel-body">
+          <div class="field-grid">
+            <label>
+              <span>起点节点</span>
+              <select id="fromInput"></select>
+            </label>
+            <label>
+              <span>终点节点</span>
+              <select id="toInput"></select>
+            </label>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span>起点方位</span>
+              <select id="fromSideInput">
+                <option value="top">上</option>
+                <option value="right">右</option>
+                <option value="bottom">下</option>
+                <option value="left">左</option>
+              </select>
+            </label>
+            <label>
+              <span>终点方位</span>
+              <select id="toSideInput">
+                <option value="top">上</option>
+                <option value="right">右</option>
+                <option value="bottom">下</option>
+                <option value="left">左</option>
+              </select>
+            </label>
+          </div>
+          <button id="applyEdgeBtn" type="button">应用连线设置</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>文件</h2>
+          <button id="resetBtn" type="button">恢复初始图</button>
+        </div>
+        <div class="panel-body">
+          <div class="button-row">
+            <button id="exportJsonBtn" type="button">导出 JSON</button>
+            <button id="importJsonBtn" type="button">导入 JSON</button>
+          </div>
+          <input class="hidden-file" id="jsonFileInput" type="file" accept="application/json,.json">
+          <p class="hint">JSON 用来以后继续编辑；PNG/SVG 用来放进文档或汇报。</p>
+          <div class="status" id="status"></div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    const storageKey = "module-flowchart-editor-v1";
+    const svgNS = "http://www.w3.org/2000/svg";
+
+    const defaultData = {
+      bands: [
+        { id: "task", label: "任务模块", x: 0, y: 0, w: 1220, h: 180, fill: "#dcefd9", stroke: "#91bd84", titleX: 26, titleY: 68 },
+        { id: "sensor", label: "传感器模块", x: 0, y: 180, w: 1220, h: 390, fill: "#fff2c8", stroke: "#e0c45b", titleX: 900, titleY: 250 },
+        { id: "motion", label: "底层运动模块", x: 0, y: 570, w: 1220, h: 370, fill: "#f8cdcd", stroke: "#e08282", titleX: 855, titleY: 640 }
+      ],
+      dividers: [
+        { x1: 432, y1: 180, x2: 432, y2: 570 },
+        { x1: 807, y1: 180, x2: 807, y2: 570 }
+      ],
+      nodes: [
+        { id: "task_pick", label: "识别与抓取任务\n物料投递任务", x: 288, y: 58, w: 216, h: 108, band: "task" },
+        { id: "task_move", label: "运动任务", x: 523, y: 58, w: 216, h: 108, band: "task" },
+        { id: "task_store", label: "物料存储任务", x: 755, y: 58, w: 216, h: 108, band: "task" },
+        { id: "qr", label: "二维码模块", x: 75, y: 200, w: 218, h: 108, band: "sensor" },
+        { id: "openmv", label: "openMv驱动", x: 75, y: 325, w: 218, h: 108, band: "sensor" },
+        { id: "arm", label: "机械臂驱动", x: 75, y: 450, w: 218, h: 108, band: "sensor" },
+        { id: "ir", label: "红外传感器", x: 450, y: 290, w: 216, h: 108, band: "sensor" },
+        { id: "warehouse", label: "仓库电机驱动", x: 970, y: 290, w: 216, h: 108, band: "sensor" },
+        { id: "rfid", label: "RFID读卡模块", x: 970, y: 415, w: 216, h: 108, band: "sensor" },
+        { id: "attitude", label: "陀螺仪驱动", x: 57, y: 618, w: 218, h: 108, band: "motion" },
+        { id: "encoder", label: "编码器捕获速度", x: 57, y: 735, w: 218, h: 108, band: "motion" },
+        { id: "solver", label: "运动解算", x: 486, y: 618, w: 218, h: 108, band: "motion" },
+        { id: "pid", label: "pid闭环控制", x: 486, y: 760, w: 218, h: 108, band: "motion" },
+        { id: "motor", label: "电机驱动", x: 970, y: 760, w: 216, h: 108, band: "motion" }
+      ],
+      edges: [
+        { id: "e1", from: "task_pick", to: "qr", fromSide: "bottom", toSide: "right", via: [{ x: 380, y: 255 }] },
+        { id: "e2", from: "task_pick", to: "openmv", fromSide: "bottom", toSide: "right", via: [{ x: 380, y: 380 }] },
+        { id: "e3", from: "task_pick", to: "arm", fromSide: "bottom", toSide: "right", via: [{ x: 380, y: 505 }] },
+        { id: "e4", from: "task_move", to: "ir", fromSide: "bottom", toSide: "top" },
+        { id: "e5", from: "task_move", to: "solver", fromSide: "bottom", toSide: "top", via: [{ x: 598, y: 435 }, { x: 598, y: 618 }] },
+        { id: "e6", from: "task_store", to: "warehouse", fromSide: "bottom", toSide: "left" },
+        { id: "e7", from: "task_store", to: "rfid", fromSide: "bottom", toSide: "left" },
+        { id: "e8", from: "attitude", to: "solver", fromSide: "right", toSide: "left" },
+        { id: "e9", from: "encoder", to: "pid", fromSide: "right", toSide: "left" },
+        { id: "e10", from: "solver", to: "pid", fromSide: "bottom", toSide: "top" },
+        { id: "e11", from: "pid", to: "motor", fromSide: "right", toSide: "left" },
+        { id: "e12", from: "motor", to: "encoder", fromSide: "bottom", toSide: "bottom", via: [{ x: 1042, y: 910 }, { x: 165, y: 910 }] }
+      ]
+    };
+
+    const state = {
+      data: loadData(),
+      selectedType: null,
+      selectedId: null,
+      drag: null
+    };
+
+    const chart = document.getElementById("chart");
+    const bandsLayer = document.getElementById("bandsLayer");
+    const edgesLayer = document.getElementById("edgesLayer");
+    const nodesLayer = document.getElementById("nodesLayer");
+    const nodeList = document.getElementById("nodeList");
+    const statusEl = document.getElementById("status");
+    const inputs = {
+      label: document.getElementById("labelInput"),
+      x: document.getElementById("xInput"),
+      y: document.getElementById("yInput"),
+      w: document.getElementById("wInput"),
+      h: document.getElementById("hInput"),
+      band: document.getElementById("bandInput"),
+      from: document.getElementById("fromInput"),
+      to: document.getElementById("toInput"),
+      fromSide: document.getElementById("fromSideInput"),
+      toSide: document.getElementById("toSideInput")
+    };
+
+    render();
+
+    document.getElementById("saveBtn").addEventListener("click", saveData);
+    document.getElementById("addNodeBtn").addEventListener("click", addNode);
+    document.getElementById("deleteBtn").addEventListener("click", deleteSelected);
+    document.getElementById("addEdgeBtn").addEventListener("click", addEdge);
+    document.getElementById("applyEdgeBtn").addEventListener("click", applyEdge);
+    document.getElementById("resetBtn").addEventListener("click", resetData);
+    document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
+    document.getElementById("importJsonBtn").addEventListener("click", () => document.getElementById("jsonFileInput").click());
+    document.getElementById("jsonFileInput").addEventListener("change", importJson);
+    document.getElementById("exportSvgBtn").addEventListener("click", exportSvg);
+    document.getElementById("exportPngBtn").addEventListener("click", exportPng);
+
+    ["label", "x", "y", "w", "h", "band"].forEach((name) => {
+      inputs[name].addEventListener("input", updateSelectedNode);
+    });
+
+    chart.addEventListener("pointermove", dragMove);
+    chart.addEventListener("pointerup", endDrag);
+    chart.addEventListener("pointerleave", endDrag);
+    chart.addEventListener("click", (event) => {
+      if (event.target === chart || event.target.closest("#bandsLayer")) {
+        selectItem(null, null);
+      }
+    });
+
+    function loadData() {
+      const saved = localStorage.getItem(storageKey);
+      if (!saved) {
+        return clone(defaultData);
+      }
+      try {
+        return normalizeData(JSON.parse(saved));
+      } catch (error) {
+        return clone(defaultData);
+      }
+    }
+
+    function normalizeData(data) {
+      return {
+        bands: Array.isArray(data.bands) ? data.bands : clone(defaultData.bands),
+        dividers: Array.isArray(data.dividers) ? data.dividers : clone(defaultData.dividers),
+        nodes: Array.isArray(data.nodes) ? data.nodes : [],
+        edges: Array.isArray(data.edges) ? data.edges : []
+      };
+    }
+
+    function clone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function render() {
+      renderBands();
+      renderEdges();
+      renderNodes();
+      renderControls();
+      renderSelectionPanel();
+    }
+
+    function renderBands() {
+      bandsLayer.replaceChildren();
+      state.data.bands.forEach((band) => {
+        const rect = svgEl("rect", {
+          class: "band",
+          x: band.x,
+          y: band.y,
+          width: band.w,
+          height: band.h,
+          fill: band.fill,
+          stroke: band.stroke
+        });
+        const text = svgEl("text", {
+          class: "section-title",
+          x: band.titleX,
+          y: band.titleY
+        });
+        text.textContent = band.label;
+        bandsLayer.append(rect, text);
+      });
+
+      state.data.dividers.forEach((divider) => {
+        bandsLayer.append(svgEl("line", {
+          class: "divider",
+          x1: divider.x1,
+          y1: divider.y1,
+          x2: divider.x2,
+          y2: divider.y2,
+          stroke: "#e0c45b"
+        }));
+      });
+    }
+
+    function renderEdges() {
+      edgesLayer.replaceChildren();
+      state.data.edges.forEach((edge) => {
+        const path = svgEl("path", {
+          class: edge.id === state.selectedId && state.selectedType === "edge" ? "edge selected" : "edge",
+          d: buildPath(edge),
+          markerEnd: edge.id === state.selectedId && state.selectedType === "edge" ? "url(#arrowBlue)" : "url(#arrow)"
+        });
+        path.dataset.edgeId = edge.id;
+        path.addEventListener("click", (event) => {
+          event.stopPropagation();
+          selectItem("edge", edge.id);
+        });
+        edgesLayer.append(path);
+      });
+    }
+
+    function renderNodes() {
+      nodesLayer.replaceChildren();
+      state.data.nodes.forEach((node) => {
+        const group = svgEl("g", {
+          class: node.id === state.selectedId && state.selectedType === "node" ? "node selected" : "node",
+          transform: `translate(${node.x} ${node.y})`
+        });
+        group.dataset.nodeId = node.id;
+        group.append(svgEl("rect", { width: node.w, height: node.h }));
+
+        splitLines(node.label).forEach((line, index, lines) => {
+          const text = svgEl("text", {
+            x: node.w / 2,
+            y: node.h / 2 + (index - (lines.length - 1) / 2) * 26
+          });
+          text.textContent = line;
+          group.append(text);
+        });
+
+        group.addEventListener("pointerdown", (event) => startDrag(event, node));
+        group.addEventListener("click", (event) => {
+          event.stopPropagation();
+          selectItem("node", node.id);
+        });
+        group.addEventListener("dblclick", (event) => {
+          event.stopPropagation();
+          const nextLabel = prompt("修改节点文字", node.label);
+          if (nextLabel !== null) {
+            node.label = nextLabel.trim() || node.label;
+            selectItem("node", node.id);
+            render();
+            autosaveQuietly();
+          }
+        });
+        nodesLayer.append(group);
+      });
+    }
+
+    function renderControls() {
+      inputs.band.replaceChildren(...state.data.bands.map((band) => optionEl(band.id, band.label)));
+      inputs.from.replaceChildren(...state.data.nodes.map((node) => optionEl(node.id, node.label.replace(/\n/g, " / "))));
+      inputs.to.replaceChildren(...state.data.nodes.map((node) => optionEl(node.id, node.label.replace(/\n/g, " / "))));
+
+      nodeList.replaceChildren();
+      state.data.nodes.forEach((node) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = node.id === state.selectedId && state.selectedType === "node" ? "active" : "";
+        item.innerHTML = `<span>${escapeHtml(node.label).replace(/\n/g, " / ")}</span><small>${Math.round(node.x)}, ${Math.round(node.y)}</small>`;
+        item.addEventListener("click", () => selectItem("node", node.id));
+        nodeList.append(item);
+      });
+    }
+
+    function renderSelectionPanel() {
+      const node = getSelectedNode();
+      const edge = getSelectedEdge();
+      const nodeSelected = Boolean(node);
+      const edgeSelected = Boolean(edge);
+
+      inputs.label.disabled = !nodeSelected;
+      inputs.x.disabled = !nodeSelected;
+      inputs.y.disabled = !nodeSelected;
+      inputs.w.disabled = !nodeSelected;
+      inputs.h.disabled = !nodeSelected;
+      inputs.band.disabled = !nodeSelected;
+      document.getElementById("deleteBtn").disabled = !nodeSelected && !edgeSelected;
+      document.getElementById("applyEdgeBtn").disabled = !edgeSelected;
+
+      if (node) {
+        inputs.label.value = node.label;
+        inputs.x.value = Math.round(node.x);
+        inputs.y.value = Math.round(node.y);
+        inputs.w.value = Math.round(node.w);
+        inputs.h.value = Math.round(node.h);
+        inputs.band.value = node.band;
+        document.getElementById("selectionHint").textContent = "正在编辑节点。";
+      } else {
+        inputs.label.value = "";
+        inputs.x.value = "";
+        inputs.y.value = "";
+        inputs.w.value = "";
+        inputs.h.value = "";
+        inputs.band.value = state.data.bands[0]?.id || "";
+        document.getElementById("selectionHint").textContent = edge ? "正在编辑连线。" : "还没有选中节点或连线。";
+      }
+
+      if (edge) {
+        inputs.from.value = edge.from;
+        inputs.to.value = edge.to;
+        inputs.fromSide.value = edge.fromSide;
+        inputs.toSide.value = edge.toSide;
+      } else if (state.data.nodes.length >= 2) {
+        inputs.from.value = state.data.nodes[0].id;
+        inputs.to.value = state.data.nodes[1].id;
+        inputs.fromSide.value = "right";
+        inputs.toSide.value = "left";
+      }
+    }
+
+    function selectItem(type, id) {
+      state.selectedType = type;
+      state.selectedId = id;
+      render();
+    }
+
+    function startDrag(event, node) {
+      event.preventDefault();
+      selectItem("node", node.id);
+      const point = getSvgPoint(event);
+      state.drag = {
+        id: node.id,
+        offsetX: point.x - node.x,
+        offsetY: point.y - node.y
+      };
+      event.currentTarget.classList.add("dragging");
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+
+    function dragMove(event) {
+      if (!state.drag) {
+        return;
+      }
+      const node = state.data.nodes.find((item) => item.id === state.drag.id);
+      if (!node) {
+        return;
+      }
+      const point = getSvgPoint(event);
+      node.x = clamp(Math.round(point.x - state.drag.offsetX), 0, 1220 - node.w);
+      node.y = clamp(Math.round(point.y - state.drag.offsetY), 0, 940 - node.h);
+      render();
+    }
+
+    function endDrag() {
+      if (!state.drag) {
+        return;
+      }
+      state.drag = null;
+      autosaveQuietly();
+    }
+
+    function updateSelectedNode() {
+      const node = getSelectedNode();
+      if (!node) {
+        return;
+      }
+      node.label = inputs.label.value;
+      node.x = clamp(numberValue(inputs.x.value, node.x), 0, 1220 - node.w);
+      node.y = clamp(numberValue(inputs.y.value, node.y), 0, 940 - node.h);
+      node.w = clamp(numberValue(inputs.w.value, node.w), 70, 500);
+      node.h = clamp(numberValue(inputs.h.value, node.h), 40, 260);
+      node.band = inputs.band.value;
+      render();
+      autosaveQuietly();
+    }
+
+    function addNode() {
+      const id = `node_${Date.now()}`;
+      state.data.nodes.push({
+        id,
+        label: "新节点",
+        x: 520,
+        y: 340,
+        w: 180,
+        h: 88,
+        band: state.data.bands[1]?.id || state.data.bands[0]?.id || "sensor"
+      });
+      selectItem("node", id);
+      autosaveQuietly();
+    }
+
+    function deleteSelected() {
+      if (state.selectedType === "node") {
+        state.data.nodes = state.data.nodes.filter((node) => node.id !== state.selectedId);
+        state.data.edges = state.data.edges.filter((edge) => edge.from !== state.selectedId && edge.to !== state.selectedId);
+      }
+      if (state.selectedType === "edge") {
+        state.data.edges = state.data.edges.filter((edge) => edge.id !== state.selectedId);
+      }
+      selectItem(null, null);
+      autosaveQuietly();
+    }
+
+    function addEdge() {
+      if (state.data.nodes.length < 2) {
+        setStatus("至少需要两个节点才能新增连线。");
+        return;
+      }
+      const edge = {
+        id: `edge_${Date.now()}`,
+        from: inputs.from.value,
+        to: inputs.to.value,
+        fromSide: inputs.fromSide.value,
+        toSide: inputs.toSide.value
+      };
+      state.data.edges.push(edge);
+      selectItem("edge", edge.id);
+      autosaveQuietly();
+    }
+
+    function applyEdge() {
+      const edge = getSelectedEdge();
+      if (!edge) {
+        return;
+      }
+      edge.from = inputs.from.value;
+      edge.to = inputs.to.value;
+      edge.fromSide = inputs.fromSide.value;
+      edge.toSide = inputs.toSide.value;
+      delete edge.via;
+      render();
+      autosaveQuietly();
+    }
+
+    function getSelectedNode() {
+      if (state.selectedType !== "node") {
+        return null;
+      }
+      return state.data.nodes.find((node) => node.id === state.selectedId) || null;
+    }
+
+    function getSelectedEdge() {
+      if (state.selectedType !== "edge") {
+        return null;
+      }
+      return state.data.edges.find((edge) => edge.id === state.selectedId) || null;
+    }
+
+    function buildPath(edge) {
+      const from = state.data.nodes.find((node) => node.id === edge.from);
+      const to = state.data.nodes.find((node) => node.id === edge.to);
+      if (!from || !to) {
+        return "";
+      }
+      const start = anchor(from, edge.fromSide);
+      const end = anchor(to, edge.toSide);
+      const points = [start, ...(edge.via || []), end];
+      if (points.length > 2) {
+        return `M ${points.map((point) => `${point.x} ${point.y}`).join(" L ")}`;
+      }
+      const mid = orthogonalMidpoint(start, end, edge.fromSide, edge.toSide);
+      return `M ${start.x} ${start.y} L ${mid.x1} ${mid.y1} L ${mid.x2} ${mid.y2} L ${end.x} ${end.y}`;
+    }
+
+    function anchor(node, side) {
+      const map = {
+        top: { x: node.x + node.w / 2, y: node.y },
+        right: { x: node.x + node.w, y: node.y + node.h / 2 },
+        bottom: { x: node.x + node.w / 2, y: node.y + node.h },
+        left: { x: node.x, y: node.y + node.h / 2 }
+      };
+      return map[side] || map.right;
+    }
+
+    function orthogonalMidpoint(start, end, fromSide, toSide) {
+      const horizontal = fromSide === "left" || fromSide === "right" || toSide === "left" || toSide === "right";
+      if (horizontal) {
+        const midX = Math.round((start.x + end.x) / 2);
+        return { x1: midX, y1: start.y, x2: midX, y2: end.y };
+      }
+      const midY = Math.round((start.y + end.y) / 2);
+      return { x1: start.x, y1: midY, x2: end.x, y2: midY };
+    }
+
+    function splitLines(label) {
+      return String(label || "").split("\n").filter((line) => line.length > 0);
+    }
+
+    function getSvgPoint(event) {
+      const point = chart.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      return point.matrixTransform(chart.getScreenCTM().inverse());
+    }
+
+    function saveData() {
+      localStorage.setItem(storageKey, JSON.stringify(state.data));
+      setStatus("已保存到浏览器本地。");
+    }
+
+    function autosaveQuietly() {
+      localStorage.setItem(storageKey, JSON.stringify(state.data));
+    }
+
+    function resetData() {
+      state.data = clone(defaultData);
+      state.selectedType = null;
+      state.selectedId = null;
+      saveData();
+      render();
+      setStatus("已恢复初始流程图。");
+    }
+
+    function exportJson() {
+      downloadBlob(JSON.stringify(state.data, null, 2), "module-flowchart.json", "application/json");
+      setStatus("已导出 JSON。");
+    }
+
+    function importJson(event) {
+      const file = event.target.files[0];
+      if (!file) {
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          state.data = normalizeData(JSON.parse(reader.result));
+          state.selectedType = null;
+          state.selectedId = null;
+          saveData();
+          render();
+          setStatus("已导入 JSON。");
+        } catch (error) {
+          setStatus("JSON 格式不正确。");
+        }
+      };
+      reader.readAsText(file, "utf-8");
+      event.target.value = "";
+    }
+
+    function exportSvg() {
+      const source = serializeSvg();
+      downloadBlob(source, "module-flowchart.svg", "image/svg+xml;charset=utf-8");
+      setStatus("已导出 SVG。");
+    }
+
+    function exportPng() {
+      const source = serializeSvg();
+      const image = new Image();
+      const url = URL.createObjectURL(new Blob([source], { type: "image/svg+xml;charset=utf-8" }));
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1220;
+        canvas.height = 940;
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((blob) => {
+          downloadBlob(blob, "module-flowchart.png", "image/png");
+          setStatus("已导出 PNG。");
+        });
+      };
+      image.src = url;
+    }
+
+    function serializeSvg() {
+      const copy = chart.cloneNode(true);
+      copy.setAttribute("xmlns", svgNS);
+      copy.querySelectorAll(".selected").forEach((item) => item.classList.remove("selected"));
+      const style = document.createElement("style");
+      style.textContent = `
+        .band{stroke-width:2}.divider{stroke-width:2}.section-title{fill:#050807;font-size:52px;font-weight:500;font-family:Microsoft YaHei,Segoe UI,Arial,sans-serif}
+        .node rect{fill:#fff;stroke:#242a28;stroke-width:2;rx:0}.node text{fill:#1f2724;font-size:20px;text-anchor:middle;dominant-baseline:middle;font-family:Microsoft YaHei,Segoe UI,Arial,sans-serif}
+        .edge{fill:none;stroke:#111816;stroke-width:2.5;stroke-linecap:square;stroke-linejoin:miter}
+      `;
+      copy.insertBefore(style, copy.firstChild);
+      return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(copy)}`;
+    }
+
+    function downloadBlob(content, fileName, type) {
+      const blob = content instanceof Blob ? content : new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+      window.clearTimeout(setStatus.timer);
+      setStatus.timer = window.setTimeout(() => {
+        statusEl.textContent = "";
+      }, 2600);
+    }
+
+    function svgEl(name, attrs = {}) {
+      const element = document.createElementNS(svgNS, name);
+      Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, value));
+      return element;
+    }
+
+    function optionEl(value, label) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      return option;
+    }
+
+    function numberValue(value, fallback) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+  </script>
+</body>
+</html>

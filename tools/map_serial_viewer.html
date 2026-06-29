@@ -1,0 +1,1650 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>地图串口绘制</title>
+  <style>
+    :root {
+      --bg: #f6f7f4;
+      --panel: #ffffff;
+      --ink: #18211b;
+      --muted: #68736c;
+      --line: #cfd7d1;
+      --field: #fff7ef;
+      --grid: #d8ddd6;
+      --axis: #47544b;
+      --obstacle: #111111;
+      --path: #1269ff;
+      --target: #d0332f;
+      --start-zone: #1f9d71;
+      --start-zone-fill: rgba(31, 157, 113, 0.16);
+      --free: #f4faf5;
+      --accent: #167c62;
+      --accent-strong: #0d5f4a;
+      --warn: #9b5b15;
+      --bad: #b42318;
+      --ok: #126b49;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    button,
+    select,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      padding: 8px 12px;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    button.primary:hover {
+      background: var(--accent-strong);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    select,
+    input {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 6px 8px;
+    }
+
+    .app {
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #eef3ef;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      image-rendering: pixelated;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .title {
+      min-width: 180px;
+      display: grid;
+      gap: 2px;
+    }
+
+    .title strong {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .status-pill {
+      min-width: 120px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--muted);
+      padding: 8px 10px;
+      text-align: center;
+    }
+
+    .status-pill.ok {
+      border-color: #9cd7bd;
+      background: #effaf4;
+      color: var(--ok);
+    }
+
+    .status-pill.error {
+      border-color: #efaaa2;
+      background: #fff1f0;
+      color: var(--bad);
+    }
+
+    .main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+    }
+
+    .map-stage {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: #fbfcfa;
+    }
+
+    .map-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .map-info strong {
+      color: var(--ink);
+    }
+
+    .canvas-wrap {
+      position: relative;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    #mapCanvas {
+      width: min(100%, calc((100vh - 190px) * 2));
+      height: auto;
+      max-height: calc(100vh - 190px);
+      aspect-ratio: 2 / 1;
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--field);
+      cursor: crosshair;
+    }
+
+    .sidebar {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto 300px;
+      border-left: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fbfdfb;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 20px;
+    }
+
+    .manual {
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .manual label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .manual textarea {
+      width: 100%;
+      min-height: 82px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px;
+      color: var(--ink);
+      background: #ffffff;
+      line-height: 1.45;
+    }
+
+    .manual-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .target-panel {
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .target-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .resample-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .checkbox-line {
+      min-height: 36px;
+      display: flex !important;
+      grid-template-columns: none !important;
+      align-items: center;
+      gap: 8px !important;
+      padding: 6px 0;
+    }
+
+    .checkbox-line input {
+      min-height: 0;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+    }
+
+    .target-panel label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .log {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 300px;
+      overflow: hidden;
+    }
+
+    .log-head {
+      padding: 10px 14px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .log-list {
+      min-height: 0;
+      overflow: auto;
+      margin: 0;
+      padding: 10px 14px;
+      list-style: none;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .log-list li {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--muted);
+    }
+
+    .log-list li.bad {
+      color: var(--bad);
+    }
+
+    .log-list li.ok {
+      color: var(--ok);
+    }
+
+    @media (max-width: 980px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .controls {
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .main {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <img
+        class="brand-mark"
+        alt=""
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAIAAAC0Ujn1AAAAPUlEQVR4nO2UsQ0AIAwDiwz9d9qBEEJQSwq0wfYAfC9cPCUzRqPRaDR6B1QDx+c5yJCR0Wh0Wn2QK6z5AgfaXQVGYeqUrwAAAABJRU5ErkJggg==">
+      <div class="title">
+        <strong>地图串口绘制</strong>
+        <span>x 竖直向上，y 水平向左，20mm 栅格</span>
+      </div>
+      <div class="controls">
+        <label>
+          波特率
+          <select id="baudRate">
+            <option value="115200" selected>115200</option>
+            <option value="230400">230400</option>
+            <option value="460800">460800</option>
+            <option value="921600">921600</option>
+          </select>
+        </label>
+        <label>
+          坐标
+          <select id="coordMode">
+            <option value="mm" selected>mm</option>
+            <option value="grid">grid</option>
+          </select>
+        </label>
+        <button id="connectBtn" class="primary">连接串口</button>
+        <button id="disconnectBtn" disabled>断开</button>
+        <button id="clearBtn">清空地图</button>
+        <button id="clearPathBtn">清除轨迹</button>
+        <button id="savePngBtn">导出图片</button>
+        <div id="serialStatus" class="status-pill">未连接</div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="map-stage">
+        <div class="map-info">
+          <span><strong>协议：</strong>x,y,is_obstacle\r\n</span>
+          <span><strong>x：</strong>0..2500mm 向上</span>
+          <span><strong>y：</strong>0..5000mm 向左</span>
+          <span><strong>障碍：</strong>1 黑色，2 蓝色路径，0 清除</span>
+          <span><strong>出发区：</strong>中心 x=1200, y=350，尺寸 440x440</span>
+          <span><strong>目标：</strong>点击地图更新目标点</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="mapCanvas"></canvas>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="stats">
+          <div class="metric">
+            <span>有效行</span>
+            <strong id="validCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>无效行</span>
+            <strong id="invalidCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>障碍点</span>
+            <strong id="obstacleCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>路径点</span>
+            <strong id="pathCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>最近坐标</span>
+            <strong id="lastPoint">-</strong>
+          </div>
+        </section>
+
+        <section class="manual">
+          <label for="manualInput">手动粘贴或测试输入</label>
+          <textarea id="manualInput" spellcheck="false">0,0,1
+2500,5000,1
+1250,2500,1
+1250,2500,0</textarea>
+          <div class="manual-actions">
+            <button id="applyManualBtn">写入文本</button>
+            <button id="sampleBtn">生成示例墙</button>
+          </div>
+        </section>
+
+        <section class="target-panel">
+          <div class="target-grid">
+            <label>
+              目标 x
+              <input id="targetXInput" type="number" min="0" max="2500" step="50" value="1200">
+            </label>
+            <label>
+              目标 y
+              <input id="targetYInput" type="number" min="0" max="5000" step="50" value="350">
+            </label>
+          </div>
+          <button id="sendTargetBtn" class="primary">发送目标点</button>
+          <span>发送帧：目标速度 100mm/s，目标朝向 0，目标角速度 0</span>
+          <div class="resample-panel">
+            <label class="checkbox-line">
+              <input id="pathResampleToggle" type="checkbox">
+              等间距重采样
+            </label>
+            <label>
+              采样间距 mm
+              <input id="pathSampleSpacingInput" type="number" min="50" max="1000" step="50" value="100">
+            </label>
+            <label class="checkbox-line">
+              <input id="pathArcToggle" type="checkbox">
+              圆弧过渡
+            </label>
+            <label>
+              圆弧半径 mm
+              <input id="pathArcRadiusInput" type="number" min="50" max="1000" step="50" value="150">
+            </label>
+          </div>
+          <span>圆弧开启后，最终蓝点会按采样间距输出，适合作为追踪点。</span>
+        </section>
+
+        <section class="log">
+          <div class="log-head">接收日志</div>
+          <ul id="logList" class="log-list"></ul>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    "use strict";
+
+    const MAP_X_MAX_MM = 2500;
+    const MAP_Y_MAX_MM = 5000;
+    const MAP_RESOLUTION_MM = 50;
+    const START_ZONE_SIZE_MM = 440;
+    const START_ZONE_CENTER_X_MM = 1200;
+    const START_ZONE_CENTER_Y_MM = 350;
+    const START_ZONE_X_MIN_MM = START_ZONE_CENTER_X_MM - (START_ZONE_SIZE_MM / 2);
+    const START_ZONE_X_MAX_MM = START_ZONE_CENTER_X_MM + (START_ZONE_SIZE_MM / 2);
+    const START_ZONE_Y_MIN_MM = START_ZONE_CENTER_Y_MM - (START_ZONE_SIZE_MM / 2);
+    const START_ZONE_Y_MAX_MM = START_ZONE_CENTER_Y_MM + (START_ZONE_SIZE_MM / 2);
+    const BLE_FRAME_HEAD = 0x55;
+    const BLE_FRAME_CMD_NAVIGATION = 0x01;
+    const BLE_FRAME_TAIL = 0x6B;
+    const BLE_YAW_SIGN_POSITIVE = 0x01;
+    const TARGET_LINEAR_SPEED_MM_S = 100;
+    const TARGET_YAW_DEG = 0;
+    const TARGET_ANGULAR_SPEED_DEG_S = 0;
+    const GRID_X_COUNT = Math.floor(MAP_X_MAX_MM / MAP_RESOLUTION_MM) + 1;
+    const GRID_Y_COUNT = Math.floor(MAP_Y_MAX_MM / MAP_RESOLUTION_MM) + 1;
+    const GRID_X_MAX = GRID_X_COUNT - 1;
+    const GRID_Y_MAX = GRID_Y_COUNT - 1;
+    const MAX_LOG_LINES = 140;
+
+    const el = {
+      baudRate: document.getElementById("baudRate"),
+      coordMode: document.getElementById("coordMode"),
+      connectBtn: document.getElementById("connectBtn"),
+      disconnectBtn: document.getElementById("disconnectBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      clearPathBtn: document.getElementById("clearPathBtn"),
+      savePngBtn: document.getElementById("savePngBtn"),
+      serialStatus: document.getElementById("serialStatus"),
+      canvas: document.getElementById("mapCanvas"),
+      validCount: document.getElementById("validCount"),
+      invalidCount: document.getElementById("invalidCount"),
+      obstacleCount: document.getElementById("obstacleCount"),
+      pathCount: document.getElementById("pathCount"),
+      lastPoint: document.getElementById("lastPoint"),
+      targetXInput: document.getElementById("targetXInput"),
+      targetYInput: document.getElementById("targetYInput"),
+      sendTargetBtn: document.getElementById("sendTargetBtn"),
+      pathResampleToggle: document.getElementById("pathResampleToggle"),
+      pathSampleSpacingInput: document.getElementById("pathSampleSpacingInput"),
+      pathArcToggle: document.getElementById("pathArcToggle"),
+      pathArcRadiusInput: document.getElementById("pathArcRadiusInput"),
+      manualInput: document.getElementById("manualInput"),
+      applyManualBtn: document.getElementById("applyManualBtn"),
+      sampleBtn: document.getElementById("sampleBtn"),
+      logList: document.getElementById("logList")
+    };
+
+    const state = {
+      port: null,
+      reader: null,
+      keepReading: false,
+      receiveBuffer: "",
+      cells: new Uint8Array(GRID_X_COUNT * GRID_Y_COUNT),
+      rawPathPoints: [],
+      renderedPathIndices: new Set(),
+      validCount: 0,
+      invalidCount: 0,
+      obstacleCount: 0,
+      pathCount: 0,
+      lastPoint: null,
+      redrawPending: false
+    };
+
+    const ctx = el.canvas.getContext("2d");
+
+    function cellIndex(gridX, gridY) {
+      return (gridX * GRID_Y_COUNT) + gridY;
+    }
+
+    function setStatus(text, kind) {
+      el.serialStatus.textContent = text;
+      el.serialStatus.classList.remove("ok", "error");
+      if (kind) {
+        el.serialStatus.classList.add(kind);
+      }
+    }
+
+    function updateStats() {
+      el.validCount.textContent = String(state.validCount);
+      el.invalidCount.textContent = String(state.invalidCount);
+      el.obstacleCount.textContent = String(state.obstacleCount);
+      el.pathCount.textContent = String(state.pathCount);
+      el.lastPoint.textContent = state.lastPoint ? state.lastPoint : "-";
+    }
+
+    function appendLog(text, kind) {
+      const item = document.createElement("li");
+      item.textContent = text;
+      if (kind) {
+        item.className = kind;
+      }
+      el.logList.appendChild(item);
+      while (el.logList.children.length > MAX_LOG_LINES) {
+        el.logList.removeChild(el.logList.firstChild);
+      }
+      el.logList.scrollTop = el.logList.scrollHeight;
+    }
+
+    function mmToGrid(valueMm, maxMm) {
+      const clamped = Math.max(0, Math.min(maxMm, valueMm));
+      return Math.round(clamped / MAP_RESOLUTION_MM);
+    }
+
+    function parseObstacleToken(token) {
+      const normalized = token.trim().toLowerCase();
+      if (normalized === "1" || normalized === "true" || normalized === "obstacle") {
+        return 1;
+      }
+      if (normalized === "2" || normalized === "path" || normalized === "route") {
+        return 2;
+      }
+      if (normalized === "0" || normalized === "false" || normalized === "free") {
+        return 0;
+      }
+      return null;
+    }
+
+    function parseLine(line) {
+      const trimmed = line.trim();
+      const parts = trimmed.split(",");
+      let xValue = 0;
+      let yValue = 0;
+      let obstacleValue = null;
+      let gridX = 0;
+      let gridY = 0;
+
+      if (trimmed.length === 0) {
+        return null;
+      }
+
+      if (parts.length !== 3) {
+        return { ok: false, reason: "字段数量不为3", raw: line };
+      }
+
+      xValue = Number(parts[0].trim());
+      yValue = Number(parts[1].trim());
+      obstacleValue = parseObstacleToken(parts[2]);
+
+      if (!Number.isFinite(xValue) || !Number.isFinite(yValue) || obstacleValue === null) {
+        return { ok: false, reason: "数值格式错误", raw: line };
+      }
+
+      if (el.coordMode.value === "grid") {
+        gridX = Math.trunc(xValue);
+        gridY = Math.trunc(yValue);
+        if (gridX < 0 || gridX > GRID_X_MAX || gridY < 0 || gridY > GRID_Y_MAX) {
+          return { ok: false, reason: "grid坐标越界", raw: line };
+        }
+        return {
+          ok: true,
+          xMm: gridX * MAP_RESOLUTION_MM,
+          yMm: gridY * MAP_RESOLUTION_MM,
+          gridX,
+          gridY,
+          obstacle: obstacleValue
+        };
+      }
+
+      if (xValue < 0 || xValue > MAP_X_MAX_MM || yValue < 0 || yValue > MAP_Y_MAX_MM) {
+        return { ok: false, reason: "mm坐标越界", raw: line };
+      }
+
+      gridX = mmToGrid(xValue, MAP_X_MAX_MM);
+      gridY = mmToGrid(yValue, MAP_Y_MAX_MM);
+      return {
+        ok: true,
+        xMm: gridX * MAP_RESOLUTION_MM,
+        yMm: gridY * MAP_RESOLUTION_MM,
+        gridX,
+        gridY,
+        obstacle: obstacleValue
+      };
+    }
+
+    function setCellValue(index, next) {
+      const previous = state.cells[index];
+
+      if (previous === next) {
+        return;
+      }
+
+      if (previous === 1 && state.obstacleCount > 0) {
+        state.obstacleCount -= 1;
+      } else if (previous === 2 && state.pathCount > 0) {
+        state.pathCount -= 1;
+      }
+
+      if (next === 1) {
+        state.obstacleCount += 1;
+      } else if (next === 2) {
+        state.pathCount += 1;
+      }
+
+      state.cells[index] = next;
+    }
+
+    function normalizePathPoint(xMm, yMm) {
+      const gridX = mmToGrid(xMm, MAP_X_MAX_MM);
+      const gridY = mmToGrid(yMm, MAP_Y_MAX_MM);
+
+      return {
+        xMm: gridX * MAP_RESOLUTION_MM,
+        yMm: gridY * MAP_RESOLUTION_MM,
+        gridX,
+        gridY
+      };
+    }
+
+    function isSamePathPoint(a, b) {
+      return a.xMm === b.xMm && a.yMm === b.yMm;
+    }
+
+    function appendPathPoint(point) {
+      const pathPoint = normalizePathPoint(point.xMm, point.yMm);
+      const lastPoint = state.rawPathPoints[state.rawPathPoints.length - 1];
+
+      if (lastPoint && isSamePathPoint(lastPoint, pathPoint)) {
+        return;
+      }
+
+      state.rawPathPoints.push(pathPoint);
+    }
+
+    function removeRawPathPoint(point) {
+      const pathPoint = normalizePathPoint(point.xMm, point.yMm);
+      let index = 0;
+
+      for (index = 0; index < state.rawPathPoints.length; index += 1) {
+        if (isSamePathPoint(state.rawPathPoints[index], pathPoint)) {
+          state.rawPathPoints.splice(index, 1);
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function getPathSampleSpacing() {
+      let spacing = Number(el.pathSampleSpacingInput.value);
+
+      if (!Number.isFinite(spacing)) {
+        spacing = 100;
+      }
+
+      spacing = Math.max(MAP_RESOLUTION_MM, Math.min(1000, Math.round(spacing)));
+      return spacing;
+    }
+
+    function getPathArcRadius() {
+      let radius = Number(el.pathArcRadiusInput.value);
+
+      if (!Number.isFinite(radius)) {
+        radius = 160;
+      }
+
+      radius = Math.max(MAP_RESOLUTION_MM, Math.min(1000, Math.round(radius)));
+      return radius;
+    }
+
+    function pushUniquePathPoint(points, point) {
+      const normalized = normalizePathPoint(point.xMm, point.yMm);
+      const lastPoint = points[points.length - 1];
+
+      if (!lastPoint || !isSamePathPoint(lastPoint, normalized)) {
+        points.push(normalized);
+      }
+    }
+
+    function resamplePathPoints(points, spacingMm) {
+      const resampled = [];
+      let segmentIndex = 0;
+      let totalDistance = 0;
+      let nextSampleDistance = spacingMm;
+
+      if (points.length <= 1) {
+        return points.slice();
+      }
+
+      pushUniquePathPoint(resampled, points[0]);
+
+      for (segmentIndex = 1; segmentIndex < points.length; segmentIndex += 1) {
+        const start = points[segmentIndex - 1];
+        const end = points[segmentIndex];
+        const dx = end.xMm - start.xMm;
+        const dy = end.yMm - start.yMm;
+        const segmentLength = Math.hypot(dx, dy);
+
+        if (segmentLength <= 0) {
+          continue;
+        }
+
+        while ((totalDistance + segmentLength) >= nextSampleDistance) {
+          const t = (nextSampleDistance - totalDistance) / segmentLength;
+          pushUniquePathPoint(resampled, {
+            xMm: start.xMm + (dx * t),
+            yMm: start.yMm + (dy * t)
+          });
+          nextSampleDistance += spacingMm;
+        }
+
+        totalDistance += segmentLength;
+      }
+
+      pushUniquePathPoint(resampled, points[points.length - 1]);
+
+      return resampled;
+    }
+
+    function signNumber(value) {
+      if (value > 0) {
+        return 1;
+      }
+
+      if (value < 0) {
+        return -1;
+      }
+
+      return 0;
+    }
+
+    function getPathDirection(start, end) {
+      return {
+        x: signNumber(end.xMm - start.xMm),
+        y: signNumber(end.yMm - start.yMm)
+      };
+    }
+
+    function simplifyPathTurnPoints(points) {
+      const simplified = [];
+      let index = 0;
+      let lastDir = null;
+      let currentDir = null;
+
+      if (points.length <= 2) {
+        return points.slice();
+      }
+
+      pushUniquePathPoint(simplified, points[0]);
+      lastDir = getPathDirection(points[0], points[1]);
+
+      for (index = 2; index < points.length; index += 1) {
+        currentDir = getPathDirection(points[index - 1], points[index]);
+        if ((currentDir.x !== lastDir.x) || (currentDir.y !== lastDir.y)) {
+          pushUniquePathPoint(simplified, points[index - 1]);
+          lastDir = currentDir;
+        }
+      }
+
+      pushUniquePathPoint(simplified, points[points.length - 1]);
+
+      return simplified;
+    }
+
+    function normalizeAngleDelta(delta) {
+      let normalized = delta;
+
+      while (normalized > Math.PI) {
+        normalized -= Math.PI * 2;
+      }
+
+      while (normalized < -Math.PI) {
+        normalized += Math.PI * 2;
+      }
+
+      return normalized;
+    }
+
+    function appendArcCorner(output, previous, corner, next, radiusMm) {
+      const inX = previous.xMm - corner.xMm;
+      const inY = previous.yMm - corner.yMm;
+      const outX = next.xMm - corner.xMm;
+      const outY = next.yMm - corner.yMm;
+      const inLen = Math.hypot(inX, inY);
+      const outLen = Math.hypot(outX, outY);
+      let dot = 0;
+      let angle = 0;
+      let tangentDistance = 0;
+      let effectiveRadius = 0;
+      let unitInX = 0;
+      let unitInY = 0;
+      let unitOutX = 0;
+      let unitOutY = 0;
+      let bisectorX = 0;
+      let bisectorY = 0;
+      let bisectorLen = 0;
+      let center = null;
+      let arcStart = null;
+      let arcEnd = null;
+      let startAngle = 0;
+      let endAngle = 0;
+      let deltaAngle = 0;
+      let arcLength = 0;
+      let steps = 0;
+      let stepIndex = 0;
+
+      if ((inLen <= 0) || (outLen <= 0)) {
+        pushUniquePathPoint(output, corner);
+        return;
+      }
+
+      unitInX = inX / inLen;
+      unitInY = inY / inLen;
+      unitOutX = outX / outLen;
+      unitOutY = outY / outLen;
+      dot = (unitInX * unitOutX) + (unitInY * unitOutY);
+      dot = Math.max(-1, Math.min(1, dot));
+      angle = Math.acos(dot);
+
+      if ((angle < 0.12) || ((Math.PI - angle) < 0.12)) {
+        pushUniquePathPoint(output, corner);
+        return;
+      }
+
+      tangentDistance = radiusMm / Math.tan(angle * 0.5);
+      tangentDistance = Math.min(tangentDistance, inLen * 0.45, outLen * 0.45);
+      effectiveRadius = tangentDistance * Math.tan(angle * 0.5);
+
+      if (effectiveRadius < MAP_RESOLUTION_MM) {
+        pushUniquePathPoint(output, corner);
+        return;
+      }
+
+      bisectorX = unitInX + unitOutX;
+      bisectorY = unitInY + unitOutY;
+      bisectorLen = Math.hypot(bisectorX, bisectorY);
+      if (bisectorLen <= 0) {
+        pushUniquePathPoint(output, corner);
+        return;
+      }
+
+      bisectorX /= bisectorLen;
+      bisectorY /= bisectorLen;
+      center = {
+        xMm: corner.xMm + (bisectorX * (effectiveRadius / Math.sin(angle * 0.5))),
+        yMm: corner.yMm + (bisectorY * (effectiveRadius / Math.sin(angle * 0.5)))
+      };
+      arcStart = {
+        xMm: corner.xMm + (unitInX * tangentDistance),
+        yMm: corner.yMm + (unitInY * tangentDistance)
+      };
+      arcEnd = {
+        xMm: corner.xMm + (unitOutX * tangentDistance),
+        yMm: corner.yMm + (unitOutY * tangentDistance)
+      };
+
+      startAngle = Math.atan2(arcStart.yMm - center.yMm, arcStart.xMm - center.xMm);
+      endAngle = Math.atan2(arcEnd.yMm - center.yMm, arcEnd.xMm - center.xMm);
+      deltaAngle = normalizeAngleDelta(endAngle - startAngle);
+      arcLength = Math.abs(deltaAngle) * effectiveRadius;
+      steps = Math.max(2, Math.ceil(arcLength / MAP_RESOLUTION_MM));
+
+      pushUniquePathPoint(output, arcStart);
+      for (stepIndex = 1; stepIndex < steps; stepIndex += 1) {
+        const ratio = stepIndex / steps;
+        const angleNow = startAngle + (deltaAngle * ratio);
+        pushUniquePathPoint(output, {
+          xMm: center.xMm + (Math.cos(angleNow) * effectiveRadius),
+          yMm: center.yMm + (Math.sin(angleNow) * effectiveRadius)
+        });
+      }
+      pushUniquePathPoint(output, arcEnd);
+    }
+
+    function applyArcTransitions(points, radiusMm) {
+      const keyPoints = simplifyPathTurnPoints(points);
+      const rounded = [];
+      let index = 0;
+
+      if (keyPoints.length <= 2) {
+        return keyPoints;
+      }
+
+      pushUniquePathPoint(rounded, keyPoints[0]);
+      for (index = 1; index < (keyPoints.length - 1); index += 1) {
+        appendArcCorner(rounded,
+                        keyPoints[index - 1],
+                        keyPoints[index],
+                        keyPoints[index + 1],
+                        radiusMm);
+      }
+      pushUniquePathPoint(rounded, keyPoints[keyPoints.length - 1]);
+
+      return rounded;
+    }
+
+    function getRenderedPathPoints() {
+      let points = state.rawPathPoints.slice();
+      let shouldResample = false;
+
+      if (el.pathArcToggle.checked) {
+        points = applyArcTransitions(points, getPathArcRadius());
+        shouldResample = true;
+      }
+
+      if (el.pathResampleToggle.checked) {
+        shouldResample = true;
+      }
+
+      if (shouldResample) {
+        return resamplePathPoints(points, getPathSampleSpacing());
+      }
+
+      return points;
+    }
+
+    function clearRenderedPathCells() {
+      state.renderedPathIndices.forEach((index) => {
+        if (state.cells[index] === 2) {
+          setCellValue(index, 0);
+        }
+      });
+      state.renderedPathIndices.clear();
+    }
+
+    function renderPathOverlay() {
+      const pathPoints = getRenderedPathPoints();
+      let index = 0;
+
+      clearRenderedPathCells();
+
+      for (index = 0; index < pathPoints.length; index += 1) {
+        const pathPoint = normalizePathPoint(pathPoints[index].xMm, pathPoints[index].yMm);
+        const cell = cellIndex(pathPoint.gridX, pathPoint.gridY);
+
+        setCellValue(cell, 2);
+        state.renderedPathIndices.add(cell);
+      }
+    }
+
+    function refreshPathOverlay() {
+      renderPathOverlay();
+      updateStats();
+      requestRedraw();
+    }
+
+    function applyPoint(point) {
+      const index = cellIndex(point.gridX, point.gridY);
+
+      if (point.obstacle === 2) {
+        appendPathPoint(point);
+        renderPathOverlay();
+      } else if (point.obstacle === 0) {
+        if (removeRawPathPoint(point)) {
+          renderPathOverlay();
+        } else {
+          state.renderedPathIndices.delete(index);
+          setCellValue(index, 0);
+        }
+      } else {
+        state.renderedPathIndices.delete(index);
+        setCellValue(index, 1);
+      }
+
+      state.validCount += 1;
+      state.lastPoint = `${point.xMm},${point.yMm},${point.obstacle}`;
+      updateStats();
+      requestRedraw();
+    }
+
+    function handleLine(line) {
+      const parsed = parseLine(line);
+      if (parsed === null) {
+        return;
+      }
+
+      if (!parsed.ok) {
+        state.invalidCount += 1;
+        updateStats();
+        appendLog(`${line.trim()}  -> ${parsed.reason}`, "bad");
+        return;
+      }
+
+      applyPoint(parsed);
+      appendLog(`${parsed.xMm},${parsed.yMm},${parsed.obstacle}`, parsed.obstacle ? "ok" : "");
+    }
+
+    function feedText(text) {
+      const normalized = text.replace(/\r/g, "");
+      const lines = normalized.split("\n");
+      let i = 0;
+
+      for (i = 0; i < lines.length; i += 1) {
+        handleLine(lines[i]);
+      }
+    }
+
+    function feedSerialText(text) {
+      const chunks = (state.receiveBuffer + text).split("\n");
+      let i = 0;
+
+      state.receiveBuffer = chunks.pop() || "";
+      for (i = 0; i < chunks.length; i += 1) {
+        handleLine(chunks[i].replace(/\r/g, ""));
+      }
+    }
+
+    function clearMap() {
+      state.cells.fill(0);
+      state.rawPathPoints = [];
+      state.renderedPathIndices.clear();
+      state.validCount = 0;
+      state.invalidCount = 0;
+      state.obstacleCount = 0;
+      state.pathCount = 0;
+      state.lastPoint = null;
+      state.receiveBuffer = "";
+      el.logList.textContent = "";
+      updateStats();
+      requestRedraw();
+    }
+
+    function clearPath() {
+      if ((state.pathCount === 0) && (state.rawPathPoints.length === 0)) {
+        return;
+      }
+
+      state.rawPathPoints = [];
+      clearRenderedPathCells();
+      updateStats();
+      requestRedraw();
+    }
+
+    function requestRedraw() {
+      if (state.redrawPending) {
+        return;
+      }
+
+      state.redrawPending = true;
+      requestAnimationFrame(() => {
+        state.redrawPending = false;
+        drawMap();
+      });
+    }
+
+    function updateCanvasBackingSize() {
+      const rect = el.canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const width = Math.max(600, Math.floor(rect.width * ratio));
+      const height = Math.max(360, Math.floor(rect.height * ratio));
+
+      if (el.canvas.width !== width || el.canvas.height !== height) {
+        el.canvas.width = width;
+        el.canvas.height = height;
+        return true;
+      }
+
+      return false;
+    }
+
+    function resizeCanvas() {
+      if (updateCanvasBackingSize()) {
+        requestRedraw();
+      }
+    }
+
+    function getMapPlot() {
+      const width = el.canvas.width;
+      const height = el.canvas.height;
+      const padLeft = 58;
+      const padRight = 22;
+      const padTop = 24;
+      const padBottom = 48;
+      const availableW = width - padLeft - padRight;
+      const availableH = height - padTop - padBottom;
+      const mapAspect = MAP_Y_MAX_MM / MAP_X_MAX_MM;
+      let plotW = availableW;
+      let plotH = plotW / mapAspect;
+      let plotOffsetX = 0;
+      let plotOffsetY = 0;
+
+      if (plotH > availableH) {
+        plotH = availableH;
+        plotW = plotH * mapAspect;
+      }
+
+      plotOffsetX = (availableW - plotW) * 0.5;
+      plotOffsetY = (availableH - plotH) * 0.5;
+
+      return {
+        x: padLeft + plotOffsetX,
+        y: padTop + plotOffsetY,
+        w: plotW,
+        h: plotH
+      };
+    }
+
+    function gridToCanvas(gridX, gridY, plot) {
+      const left = plot.x + ((GRID_Y_MAX - gridY) / GRID_Y_MAX) * plot.w;
+      const top = plot.y + ((GRID_X_MAX - gridX) / GRID_X_MAX) * plot.h;
+      return { left, top };
+    }
+
+    function rectMmToCanvas(xMinMm, xMaxMm, yMinMm, yMaxMm, plot) {
+      const left = plot.x + ((MAP_Y_MAX_MM - yMaxMm) / MAP_Y_MAX_MM) * plot.w;
+      const right = plot.x + ((MAP_Y_MAX_MM - yMinMm) / MAP_Y_MAX_MM) * plot.w;
+      const top = plot.y + ((MAP_X_MAX_MM - xMaxMm) / MAP_X_MAX_MM) * plot.h;
+      const bottom = plot.y + ((MAP_X_MAX_MM - xMinMm) / MAP_X_MAX_MM) * plot.h;
+
+      return {
+        left,
+        top,
+        width: right - left,
+        height: bottom - top
+      };
+    }
+
+    function drawMap() {
+      updateCanvasBackingSize();
+
+      const width = el.canvas.width;
+      const height = el.canvas.height;
+      const plot = getMapPlot();
+      const cellW = plot.w / GRID_Y_MAX;
+      const cellH = plot.h / GRID_X_MAX;
+      let gridX = 0;
+      let gridY = 0;
+      let pos = null;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.fillStyle = getCss("--field");
+      ctx.fillRect(plot.x, plot.y, plot.w, plot.h);
+
+      drawGrid(plot);
+      drawStartZone(plot, false);
+
+      ctx.fillStyle = getCss("--obstacle");
+      for (gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+        for (gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+          if (state.cells[cellIndex(gridX, gridY)] === 1) {
+            pos = gridToCanvas(gridX, gridY, plot);
+            ctx.fillRect(
+              pos.left - (cellW * 0.5),
+              pos.top - (cellH * 0.5),
+              Math.max(2, cellW),
+              Math.max(2, cellH)
+            );
+          }
+        }
+      }
+
+      ctx.fillStyle = getCss("--path");
+      for (gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+        for (gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+          if (state.cells[cellIndex(gridX, gridY)] === 2) {
+            pos = gridToCanvas(gridX, gridY, plot);
+            ctx.fillRect(
+              pos.left - (cellW * 0.5),
+              pos.top - (cellH * 0.5),
+              Math.max(3, cellW),
+              Math.max(3, cellH)
+            );
+          }
+        }
+      }
+
+      drawStartZone(plot, true);
+      drawTargetPoint(plot);
+      drawAxes(plot);
+    }
+
+    function drawStartZone(plot, outlineOnly) {
+      const ratio = window.devicePixelRatio || 1;
+      const zone = rectMmToCanvas(
+        START_ZONE_X_MIN_MM,
+        START_ZONE_X_MAX_MM,
+        START_ZONE_Y_MIN_MM,
+        START_ZONE_Y_MAX_MM,
+        plot
+      );
+      const labelX = zone.left + 8 * ratio;
+      const labelY = zone.top + 18 * ratio;
+
+      ctx.save();
+      if (!outlineOnly) {
+        ctx.fillStyle = getCss("--start-zone-fill");
+        ctx.fillRect(zone.left, zone.top, zone.width, zone.height);
+      }
+
+      ctx.strokeStyle = getCss("--start-zone");
+      ctx.lineWidth = 2 * ratio;
+      ctx.setLineDash([8 * ratio, 5 * ratio]);
+      ctx.strokeRect(zone.left, zone.top, zone.width, zone.height);
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = getCss("--start-zone");
+      ctx.font = `${12 * ratio}px Microsoft YaHei, Segoe UI, Arial`;
+      ctx.fillText("出发区", labelX, labelY);
+      ctx.restore();
+    }
+
+    function drawGrid(plot) {
+      const majorXStep = 500 / MAP_RESOLUTION_MM;
+      const majorYStep = 500 / MAP_RESOLUTION_MM;
+      let gridX = 0;
+      let gridY = 0;
+      let pos = null;
+
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = getCss("--grid");
+
+      for (gridY = 0; gridY <= GRID_Y_MAX; gridY += majorYStep) {
+        pos = gridToCanvas(0, gridY, plot);
+        ctx.beginPath();
+        ctx.moveTo(pos.left, plot.y);
+        ctx.lineTo(pos.left, plot.y + plot.h);
+        ctx.stroke();
+      }
+
+      for (gridX = 0; gridX <= GRID_X_MAX; gridX += majorXStep) {
+        pos = gridToCanvas(gridX, 0, plot);
+        ctx.beginPath();
+        ctx.moveTo(plot.x, pos.top);
+        ctx.lineTo(plot.x + plot.w, pos.top);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawAxes(plot) {
+      const ratio = window.devicePixelRatio || 1;
+
+      ctx.save();
+      ctx.strokeStyle = getCss("--axis");
+      ctx.fillStyle = getCss("--ink");
+      ctx.lineWidth = 2 * ratio;
+      ctx.font = `${12 * ratio}px Microsoft YaHei, Segoe UI, Arial`;
+
+      ctx.strokeRect(plot.x, plot.y, plot.w, plot.h);
+
+      ctx.fillText("左 y=5000", plot.x + 8 * ratio, plot.y + plot.h + 24 * ratio);
+      ctx.fillText("右 y=0", plot.x + plot.w - 72 * ratio, plot.y + plot.h + 24 * ratio);
+      ctx.fillText("上 x=2500", plot.x + 8 * ratio, plot.y - 8 * ratio);
+      ctx.fillText("下 x=0", plot.x + 8 * ratio, plot.y + plot.h - 8 * ratio);
+
+      ctx.restore();
+    }
+
+    function drawTargetPoint(plot) {
+      const ratio = window.devicePixelRatio || 1;
+      const targetX = readTargetValue(el.targetXInput, 0, MAP_X_MAX_MM);
+      const targetY = readTargetValue(el.targetYInput, 0, MAP_Y_MAX_MM);
+      const size = 8 * ratio;
+      let gridX = 0;
+      let gridY = 0;
+      let pos = null;
+
+      if (targetX === null || targetY === null) {
+        return;
+      }
+
+      gridX = mmToGrid(targetX, MAP_X_MAX_MM);
+      gridY = mmToGrid(targetY, MAP_Y_MAX_MM);
+      pos = gridToCanvas(gridX, gridY, plot);
+
+      ctx.save();
+      ctx.strokeStyle = getCss("--target");
+      ctx.fillStyle = getCss("--target");
+      ctx.lineWidth = 2 * ratio;
+      ctx.beginPath();
+      ctx.arc(pos.left, pos.top, size * 0.65, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos.left - size, pos.top);
+      ctx.lineTo(pos.left + size, pos.top);
+      ctx.moveTo(pos.left, pos.top - size);
+      ctx.lineTo(pos.left, pos.top + size);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function getCss(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function writeInt16Be(buffer, offset, value) {
+      let normalized = value;
+
+      if (normalized < 0) {
+        normalized = 0x10000 + normalized;
+      }
+
+      buffer[offset] = (normalized >> 8) & 0xFF;
+      buffer[offset + 1] = normalized & 0xFF;
+    }
+
+    function writeUint16Be(buffer, offset, value) {
+      buffer[offset] = (value >> 8) & 0xFF;
+      buffer[offset + 1] = value & 0xFF;
+    }
+
+    function readTargetValue(input, minValue, maxValue) {
+      const value = Number(input.value);
+
+      if (!Number.isFinite(value)) {
+        return null;
+      }
+
+      if (value < minValue || value > maxValue) {
+        return null;
+      }
+
+      return Math.round(value);
+    }
+
+    function canvasEventToMapPoint(event) {
+      const rect = el.canvas.getBoundingClientRect();
+      let ratioX = 1;
+      let ratioY = 1;
+      let canvasX = 0;
+      let canvasY = 0;
+      let plot = null;
+      let gridX = 0;
+      let gridY = 0;
+
+      if ((rect.width <= 0) || (rect.height <= 0)) {
+        return null;
+      }
+
+      ratioX = el.canvas.width / rect.width;
+      ratioY = el.canvas.height / rect.height;
+      canvasX = (event.clientX - rect.left) * ratioX;
+      canvasY = (event.clientY - rect.top) * ratioY;
+      plot = getMapPlot();
+
+      if ((canvasX < plot.x) ||
+          (canvasX > (plot.x + plot.w)) ||
+          (canvasY < plot.y) ||
+          (canvasY > (plot.y + plot.h))) {
+        return null;
+      }
+
+      gridX = Math.round(GRID_X_MAX - (((canvasY - plot.y) / plot.h) * GRID_X_MAX));
+      gridY = Math.round(GRID_Y_MAX - (((canvasX - plot.x) / plot.w) * GRID_Y_MAX));
+      gridX = Math.max(0, Math.min(GRID_X_MAX, gridX));
+      gridY = Math.max(0, Math.min(GRID_Y_MAX, gridY));
+
+      return {
+        xMm: gridX * MAP_RESOLUTION_MM,
+        yMm: gridY * MAP_RESOLUTION_MM
+      };
+    }
+
+    function updateTargetFromCanvas(event) {
+      const point = canvasEventToMapPoint(event);
+
+      if (point === null) {
+        return;
+      }
+
+      el.targetXInput.value = String(point.xMm);
+      el.targetYInput.value = String(point.yMm);
+      appendLog(`目标点更新为 ${point.xMm},${point.yMm}`, "ok");
+      requestRedraw();
+    }
+
+    function buildNavigationFrame(targetX, targetY) {
+      const frame = new Uint8Array(12);
+
+      frame[0] = BLE_FRAME_HEAD;
+      frame[1] = BLE_FRAME_CMD_NAVIGATION;
+      writeInt16Be(frame, 2, targetX);
+      writeInt16Be(frame, 4, targetY);
+      frame[6] = BLE_YAW_SIGN_POSITIVE;
+      frame[7] = TARGET_YAW_DEG;
+      writeUint16Be(frame, 8, TARGET_LINEAR_SPEED_MM_S);
+      frame[10] = TARGET_ANGULAR_SPEED_DEG_S;
+      frame[11] = BLE_FRAME_TAIL;
+
+      return frame;
+    }
+
+    async function sendTargetPoint() {
+      const targetX = readTargetValue(el.targetXInput, 0, MAP_X_MAX_MM);
+      const targetY = readTargetValue(el.targetYInput, 0, MAP_Y_MAX_MM);
+      let writer = null;
+      let frame = null;
+
+      if (targetX === null || targetY === null) {
+        appendLog("目标点坐标越界或格式错误", "bad");
+        return;
+      }
+
+      if (!state.port || !state.port.writable) {
+        appendLog("串口未连接，无法发送目标点", "bad");
+        return;
+      }
+
+      frame = buildNavigationFrame(targetX, targetY);
+      try {
+        writer = state.port.writable.getWriter();
+        await writer.write(frame);
+        appendLog(`发送目标点 ${targetX},${targetY} v=${TARGET_LINEAR_SPEED_MM_S}`, "ok");
+      } catch (error) {
+        appendLog(`发送目标点失败：${error.message}`, "bad");
+      } finally {
+        if (writer) {
+          writer.releaseLock();
+        }
+      }
+    }
+
+    async function connectSerial() {
+      const baudRate = Number(el.baudRate.value);
+
+      if (!("serial" in navigator)) {
+        setStatus("Web Serial 不可用", "error");
+        appendLog("当前浏览器不支持 Web Serial，请使用 Chrome 或 Edge。", "bad");
+        return;
+      }
+
+      try {
+        state.port = await navigator.serial.requestPort();
+        await state.port.open({
+          baudRate,
+          dataBits: 8,
+          stopBits: 1,
+          parity: "none",
+          flowControl: "none"
+        });
+        state.keepReading = true;
+        el.connectBtn.disabled = true;
+        el.disconnectBtn.disabled = false;
+        setStatus(`已连接 ${baudRate}`, "ok");
+        readSerialLoop();
+      } catch (error) {
+        setStatus("连接失败", "error");
+        appendLog(`连接失败：${error.message}`, "bad");
+      }
+    }
+
+    async function disconnectSerial() {
+      state.keepReading = false;
+
+      try {
+        if (state.reader) {
+          await state.reader.cancel();
+          state.reader.releaseLock();
+          state.reader = null;
+        }
+        if (state.port) {
+          await state.port.close();
+          state.port = null;
+        }
+      } catch (error) {
+        appendLog(`断开异常：${error.message}`, "bad");
+      }
+
+      el.connectBtn.disabled = false;
+      el.disconnectBtn.disabled = true;
+      setStatus("未连接", "");
+    }
+
+    async function readSerialLoop() {
+      const decoder = new TextDecoder();
+
+      while (state.port && state.port.readable && state.keepReading) {
+        try {
+          state.reader = state.port.readable.getReader();
+          while (state.keepReading) {
+            const result = await state.reader.read();
+            if (result.done) {
+              break;
+            }
+            if (result.value) {
+              feedSerialText(decoder.decode(result.value, { stream: true }));
+            }
+          }
+        } catch (error) {
+          if (state.keepReading) {
+            appendLog(`读取异常：${error.message}`, "bad");
+            setStatus("读取异常", "error");
+          }
+        } finally {
+          if (state.reader) {
+            state.reader.releaseLock();
+            state.reader = null;
+          }
+        }
+      }
+    }
+
+    function savePng() {
+      const link = document.createElement("a");
+      link.download = "map_serial_viewer.png";
+      link.href = el.canvas.toDataURL("image/png");
+      link.click();
+    }
+
+    function buildSampleWall() {
+      const lines = [];
+      let x = 0;
+
+      for (x = 200; x <= 2300; x += 50) {
+        lines.push(`${x},2500,1`);
+      }
+      lines.push("1000,2500,0");
+      lines.push("1050,2500,0");
+      lines.push("1100,2500,0");
+      el.manualInput.value = lines.join("\n");
+      feedText(el.manualInput.value);
+    }
+
+    function init() {
+      updateStats();
+      resizeCanvas();
+      drawMap();
+
+      el.connectBtn.addEventListener("click", connectSerial);
+      el.disconnectBtn.addEventListener("click", disconnectSerial);
+      el.clearBtn.addEventListener("click", clearMap);
+      el.clearPathBtn.addEventListener("click", clearPath);
+      el.savePngBtn.addEventListener("click", savePng);
+      el.applyManualBtn.addEventListener("click", () => feedText(el.manualInput.value));
+      el.sampleBtn.addEventListener("click", buildSampleWall);
+      el.sendTargetBtn.addEventListener("click", sendTargetPoint);
+      el.canvas.addEventListener("click", updateTargetFromCanvas);
+      el.targetXInput.addEventListener("input", requestRedraw);
+      el.targetYInput.addEventListener("input", requestRedraw);
+      el.pathResampleToggle.addEventListener("change", refreshPathOverlay);
+      el.pathSampleSpacingInput.addEventListener("input", refreshPathOverlay);
+      el.pathArcToggle.addEventListener("change", refreshPathOverlay);
+      el.pathArcRadiusInput.addEventListener("input", refreshPathOverlay);
+      window.addEventListener("resize", resizeCanvas);
+
+      if (!("serial" in navigator)) {
+        setStatus("Web Serial 不可用", "error");
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

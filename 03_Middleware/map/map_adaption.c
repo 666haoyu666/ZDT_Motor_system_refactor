@@ -140,6 +140,8 @@ map_status_t map_adp_find_path(int16_t sx_mm, int16_t sy_mm,
 
     s_m = map_adp_to_map(s_w);            /* 世界系→地图系，范围由引擎校验 */
     g_m = map_adp_to_map(g_w);
+    // s_m = s_w;                               /* 世界系与地图系同系，直接用 */
+    // g_m = g_w;
 
     ret = map_find_path(s_m.x_mm, s_m.y_mm, g_m.x_mm, g_m.y_mm, path, cap, len);
     if (MAP_OK != ret) {

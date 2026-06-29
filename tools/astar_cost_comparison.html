@@ -1,0 +1,1972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A* 软代价对比</title>
+  <style>
+    :root {
+      --bg: #f4f6f1;
+      --panel: #ffffff;
+      --ink: #18211d;
+      --muted: #68736d;
+      --line: #d2dad3;
+      --field: #f9faf6;
+      --fixed: #2d6cdf;
+      --gradient: #16835f;
+      --danger: #b3342b;
+      --warn: #c77718;
+      --heat: #ee8b26;
+      --visited: #4d7bd9;
+      --obstacle: #111111;
+      --start: #0f9f6e;
+      --goal: #d13f2f;
+      --shadow: 0 10px 24px rgba(28, 36, 30, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcf8;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .header-meta {
+      display: flex;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(680px, 1fr) 360px;
+      gap: 16px;
+      padding: 16px;
+      max-width: 1680px;
+      margin: 0 auto;
+    }
+
+    .maps {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .map-panel,
+    .side-section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .map-panel {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .map-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .map-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+
+    .swatch.fixed {
+      background: var(--fixed);
+    }
+
+    .swatch.gradient {
+      background: var(--gradient);
+    }
+
+    .plan-state {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-bottom: 1px solid var(--line);
+      background: #fbfcf8;
+    }
+
+    .metric {
+      padding: 9px 10px;
+      border-right: 1px solid var(--line);
+      min-width: 0;
+    }
+
+    .metric:last-child {
+      border-right: 0;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+      white-space: nowrap;
+    }
+
+    .metric-value {
+      margin-top: 2px;
+      font-size: 15px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .canvas-wrap {
+      height: min(58vh, 560px);
+      min-height: 420px;
+      background: #f8faf5;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    aside {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .side-section {
+      padding: 12px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      min-width: 0;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--field);
+      color: var(--ink);
+      padding: 6px 8px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    input:focus,
+    select:focus,
+    button:focus-visible {
+      outline: 2px solid rgba(45, 108, 223, 0.28);
+      outline-offset: 1px;
+    }
+
+    .segmented,
+    .button-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .segmented {
+      margin-bottom: 10px;
+    }
+
+    button {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: #aab7ae;
+      background: #f7f9f5;
+    }
+
+    button.active {
+      border-color: #1f6fbf;
+      background: #e9f1ff;
+      color: #164f91;
+      font-weight: 700;
+    }
+
+    button.primary {
+      border-color: #176b50;
+      background: #e5f5ed;
+      color: #10523d;
+      font-weight: 700;
+    }
+
+    button.danger {
+      border-color: #d8afa9;
+      color: var(--danger);
+      background: #fff6f4;
+    }
+
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+      font-size: 13px;
+      min-height: 32px;
+    }
+
+    .check-row input {
+      width: 16px;
+      min-height: 16px;
+      accent-color: #176b50;
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .status {
+      min-height: 34px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #fbfcf8;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .status.bad {
+      border-color: #dfb0aa;
+      background: #fff4f2;
+      color: var(--danger);
+    }
+
+    .status.ok {
+      border-color: #b6d7c7;
+      background: #f0fbf5;
+      color: #176b50;
+    }
+
+    .obstacle-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 230px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .obstacle-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcf8;
+      min-width: 0;
+    }
+
+    .obstacle-text {
+      min-width: 0;
+      font-size: 12px;
+      color: var(--ink);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .delete-btn {
+      min-height: 28px;
+      padding: 4px 8px;
+      color: var(--danger);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 1180px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 820px) {
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .header-meta {
+        flex-wrap: wrap;
+        white-space: normal;
+      }
+
+      .maps,
+      aside {
+        grid-template-columns: 1fr;
+      }
+
+      .app {
+        padding: 10px;
+        min-width: 0;
+      }
+
+      .canvas-wrap {
+        min-height: 330px;
+        height: 52vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>A* 软代价对比</h1>
+    <div class="header-meta">
+      <span>2500mm x 5000mm</span>
+      <span>20mm 栅格</span>
+      <span>8 邻域 A*</span>
+    </div>
+  </header>
+
+  <main class="app">
+    <section class="maps">
+      <article class="map-panel">
+        <div class="map-head">
+          <div class="map-title"><span class="swatch fixed"></span>固定阈值惩罚</div>
+          <div class="plan-state" id="fixedState">等待规划</div>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-label">路径长度</div>
+            <div class="metric-value" id="fixedLength">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">总代价</div>
+            <div class="metric-value" id="fixedCost">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">最小距离</div>
+            <div class="metric-value" id="fixedClearance">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">搜索节点</div>
+            <div class="metric-value" id="fixedVisited">-</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="fixedCanvas" data-strategy="fixed"></canvas>
+        </div>
+      </article>
+
+      <article class="map-panel">
+        <div class="map-head">
+          <div class="map-title"><span class="swatch gradient"></span>梯度惩罚</div>
+          <div class="plan-state" id="gradientState">等待规划</div>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-label">路径长度</div>
+            <div class="metric-value" id="gradientLength">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">总代价</div>
+            <div class="metric-value" id="gradientCost">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">最小距离</div>
+            <div class="metric-value" id="gradientClearance">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">搜索节点</div>
+            <div class="metric-value" id="gradientVisited">-</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="gradientCanvas" data-strategy="gradient"></canvas>
+        </div>
+      </article>
+    </section>
+
+    <aside>
+      <section class="side-section stack">
+        <h2>点位</h2>
+        <div class="segmented" id="clickModeGroup">
+          <button type="button" data-mode="start">设置起点</button>
+          <button type="button" data-mode="goal" class="active">设置终点</button>
+        </div>
+        <div class="grid-4">
+          <label>起点 x
+            <input id="startX" type="number" min="0" max="2500" step="50" value="1200">
+          </label>
+          <label>起点 y
+            <input id="startY" type="number" min="0" max="5000" step="50" value="350">
+          </label>
+          <label>终点 x
+            <input id="goalX" type="number" min="0" max="2500" step="50" value="1950">
+          </label>
+          <label>终点 y
+            <input id="goalY" type="number" min="0" max="5000" step="50" value="1200">
+          </label>
+        </div>
+      </section>
+
+      <section class="side-section stack">
+        <h2>代价参数</h2>
+        <div class="grid-2">
+          <label>固定半径 mm
+            <input id="fixedRadius" type="number" min="0" max="1000" step="50" value="200">
+          </label>
+          <label>固定惩罚
+            <input id="fixedPenalty" type="number" min="0" max="1000" step="5" value="80">
+          </label>
+          <label>梯度半径 mm
+            <input id="gradientRadius" type="number" min="0" max="1000" step="50" value="200">
+          </label>
+          <label>梯度最大惩罚
+            <input id="gradientMaxPenalty" type="number" min="0" max="1000" step="5" value="120">
+          </label>
+        </div>
+        <div class="grid-2">
+          <label>剪枝模式
+            <select id="shortcutMode">
+              <option value="none">不剪枝</option>
+              <option value="plain">普通视线剪枝</option>
+              <option value="cost" selected>代价感知剪枝</option>
+              <option value="avoid-cost">禁入代价区剪枝</option>
+            </select>
+          </label>
+          <label>代价放宽比例
+            <input id="shortcutCostRatio" type="number" min="1" max="2" step="0.01" value="1.05">
+          </label>
+          <label class="check-row"><input id="showHeat" type="checkbox" checked>显示热力图</label>
+          <label class="check-row"><input id="showSearch" type="checkbox" checked>显示搜索区</label>
+        </div>
+      </section>
+
+      <section class="side-section stack">
+        <h2>添加障碍</h2>
+        <div class="grid-2">
+          <label>类型
+            <select id="obstacleType">
+              <option value="rect">矩形</option>
+              <option value="circle">圆形</option>
+            </select>
+          </label>
+          <label>名称
+            <input id="obstacleName" type="text" value="">
+          </label>
+        </div>
+        <div id="rectFields" class="grid-4">
+          <label>x1
+            <input id="rectX1" type="number" min="0" max="2500" step="50" value="900">
+          </label>
+          <label>y1
+            <input id="rectY1" type="number" min="0" max="5000" step="50" value="2200">
+          </label>
+          <label>x2
+            <input id="rectX2" type="number" min="0" max="2500" step="50" value="1500">
+          </label>
+          <label>y2
+            <input id="rectY2" type="number" min="0" max="5000" step="50" value="2800">
+          </label>
+        </div>
+        <div id="circleFields" class="grid-4 hidden">
+          <label>cx
+            <input id="circleX" type="number" min="0" max="2500" step="50" value="1200">
+          </label>
+          <label>cy
+            <input id="circleY" type="number" min="0" max="5000" step="50" value="2500">
+          </label>
+          <label>半径
+            <input id="circleR" type="number" min="50" max="2000" step="50" value="200">
+          </label>
+          <label>预留
+            <input type="text" value="-" disabled>
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="addObstacleBtn" type="button" class="primary">添加障碍</button>
+          <button id="defaultBtn" type="button">默认障碍</button>
+          <button id="narrowBtn" type="button">窄通道</button>
+          <button id="clearBtn" type="button" class="danger">清空</button>
+        </div>
+      </section>
+
+      <section class="side-section stack">
+        <h2>障碍列表</h2>
+        <div class="obstacle-list" id="obstacleList"></div>
+      </section>
+
+      <section class="side-section stack">
+        <h2>悬停</h2>
+        <div class="status" id="hoverBox">-</div>
+        <div class="status" id="statusBox">规划中</div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    (() => {
+      const MAP_RESOLUTION_MM = 50;
+      const MAP_X_MAX_MM = 2500;
+      const MAP_Y_MAX_MM = 5000;
+      const GRID_X_COUNT = Math.floor(MAP_X_MAX_MM / MAP_RESOLUTION_MM) + 1;
+      const GRID_Y_COUNT = Math.floor(MAP_Y_MAX_MM / MAP_RESOLUTION_MM) + 1;
+      const GRID_X_MAX = GRID_X_COUNT - 1;
+      const GRID_Y_MAX = GRID_Y_COUNT - 1;
+      const NODE_COUNT = GRID_X_COUNT * GRID_Y_COUNT;
+      const ASTAR_STRAIGHT_COST = 10;
+      const ASTAR_DIAGONAL_COST = 14;
+      const STATE_NONE = 0;
+      const STATE_OPEN = 1;
+      const STATE_CLOSED = 2;
+      const INF_COST = Number.POSITIVE_INFINITY;
+
+      const dirOffsets = [
+        { gx: 0, gy: 1, cost: ASTAR_STRAIGHT_COST },
+        { gx: 1, gy: 1, cost: ASTAR_DIAGONAL_COST },
+        { gx: 1, gy: 0, cost: ASTAR_STRAIGHT_COST },
+        { gx: 1, gy: -1, cost: ASTAR_DIAGONAL_COST },
+        { gx: 0, gy: -1, cost: ASTAR_STRAIGHT_COST },
+        { gx: -1, gy: -1, cost: ASTAR_DIAGONAL_COST },
+        { gx: -1, gy: 0, cost: ASTAR_STRAIGHT_COST },
+        { gx: -1, gy: 1, cost: ASTAR_DIAGONAL_COST }
+      ];
+
+      const defaultObstacleDefs = [
+        { type: "circle", name: "中央圆", x: 1200, y: 2500, r: 200 },
+        { type: "rect", name: "左仓库", x1: 0, y1: 2100, x2: 200, y2: 2900 },
+        { type: "circle", name: "左圆台", x: 0, y: 4300, r: 200 },
+        { type: "circle", name: "上圆柱", x: 1200, y: 4300, r: 100 },
+        { type: "rect", name: "右仓库", x1: 2300, y1: 2100, x2: 2500, y2: 2900 }
+      ];
+
+      const narrowObstacleDefs = [
+        { type: "rect", name: "下墙", x1: 620, y1: 1300, x2: 1120, y2: 3700 },
+        { type: "rect", name: "上墙", x1: 1380, y1: 1300, x2: 1880, y2: 3700 },
+        { type: "circle", name: "通道左柱", x: 1250, y: 1800, r: 130 },
+        { type: "circle", name: "通道右柱", x: 1250, y: 3200, r: 130 }
+      ];
+
+      const el = {
+        fixedCanvas: document.getElementById("fixedCanvas"),
+        gradientCanvas: document.getElementById("gradientCanvas"),
+        fixedState: document.getElementById("fixedState"),
+        gradientState: document.getElementById("gradientState"),
+        fixedLength: document.getElementById("fixedLength"),
+        fixedCost: document.getElementById("fixedCost"),
+        fixedClearance: document.getElementById("fixedClearance"),
+        fixedVisited: document.getElementById("fixedVisited"),
+        gradientLength: document.getElementById("gradientLength"),
+        gradientCost: document.getElementById("gradientCost"),
+        gradientClearance: document.getElementById("gradientClearance"),
+        gradientVisited: document.getElementById("gradientVisited"),
+        clickModeGroup: document.getElementById("clickModeGroup"),
+        startX: document.getElementById("startX"),
+        startY: document.getElementById("startY"),
+        goalX: document.getElementById("goalX"),
+        goalY: document.getElementById("goalY"),
+        fixedRadius: document.getElementById("fixedRadius"),
+        fixedPenalty: document.getElementById("fixedPenalty"),
+        gradientRadius: document.getElementById("gradientRadius"),
+        gradientMaxPenalty: document.getElementById("gradientMaxPenalty"),
+        showHeat: document.getElementById("showHeat"),
+        showSearch: document.getElementById("showSearch"),
+        shortcutMode: document.getElementById("shortcutMode"),
+        shortcutCostRatio: document.getElementById("shortcutCostRatio"),
+        obstacleType: document.getElementById("obstacleType"),
+        obstacleName: document.getElementById("obstacleName"),
+        rectFields: document.getElementById("rectFields"),
+        circleFields: document.getElementById("circleFields"),
+        rectX1: document.getElementById("rectX1"),
+        rectY1: document.getElementById("rectY1"),
+        rectX2: document.getElementById("rectX2"),
+        rectY2: document.getElementById("rectY2"),
+        circleX: document.getElementById("circleX"),
+        circleY: document.getElementById("circleY"),
+        circleR: document.getElementById("circleR"),
+        addObstacleBtn: document.getElementById("addObstacleBtn"),
+        defaultBtn: document.getElementById("defaultBtn"),
+        narrowBtn: document.getElementById("narrowBtn"),
+        clearBtn: document.getElementById("clearBtn"),
+        obstacleList: document.getElementById("obstacleList"),
+        hoverBox: document.getElementById("hoverBox"),
+        statusBox: document.getElementById("statusBox")
+      };
+
+      const state = {
+        clickMode: "goal",
+        obstacles: [],
+        nextObstacleId: 1,
+        start: { x: 1200, y: 350 },
+        goal: { x: 1940, y: 1180 },
+        hover: null,
+        obstacleMap: new Uint8Array(NODE_COUNT),
+        nearestDistance: new Float64Array(NODE_COUNT),
+        fixedPenaltyMap: new Uint16Array(NODE_COUNT),
+        gradientPenaltyMap: new Uint16Array(NODE_COUNT),
+        fixedResult: null,
+        gradientResult: null,
+        drawPending: false,
+        planTimer: 0
+      };
+
+      function clamp(value, minValue, maxValue) {
+        return Math.max(minValue, Math.min(maxValue, value));
+      }
+
+      function readNumber(input, fallback, minValue, maxValue) {
+        const value = Number(input.value);
+
+        if (!Number.isFinite(value)) {
+          return fallback;
+        }
+
+        return clamp(value, minValue, maxValue);
+      }
+
+      function roundToGridMm(value, maxValue) {
+        const gridValue = Math.round(clamp(value, 0, maxValue) / MAP_RESOLUTION_MM);
+
+        return gridValue * MAP_RESOLUTION_MM;
+      }
+
+      function gridToMm(gridValue) {
+        return gridValue * MAP_RESOLUTION_MM;
+      }
+
+      function mmToGrid(valueMm, maxMm) {
+        return Math.round(clamp(valueMm, 0, maxMm) / MAP_RESOLUTION_MM);
+      }
+
+      function pointToGrid(point) {
+        return {
+          gx: mmToGrid(point.x, MAP_X_MAX_MM),
+          gy: mmToGrid(point.y, MAP_Y_MAX_MM)
+        };
+      }
+
+      function cellIndex(gridX, gridY) {
+        return (gridY * GRID_X_COUNT) + gridX;
+      }
+
+      function isGridValid(gridX, gridY) {
+        return gridX >= 0 && gridX <= GRID_X_MAX && gridY >= 0 && gridY <= GRID_Y_MAX;
+      }
+
+      function isObstacleGrid(gridX, gridY) {
+        if (!isGridValid(gridX, gridY)) {
+          return true;
+        }
+
+        return state.obstacleMap[cellIndex(gridX, gridY)] !== 0;
+      }
+
+      function cloneObstacleDefs(defs) {
+        return defs.map((def) => {
+          const cloned = { ...def, id: state.nextObstacleId };
+          state.nextObstacleId += 1;
+          return cloned;
+        });
+      }
+
+      function obstacleLabel(obstacle) {
+        if (obstacle.type === "rect") {
+          return `${obstacle.name}  矩形 x:${obstacle.x1}-${obstacle.x2} y:${obstacle.y1}-${obstacle.y2}`;
+        }
+
+        return `${obstacle.name}  圆形 c:${obstacle.x},${obstacle.y} r:${obstacle.r}`;
+      }
+
+      function pointInsideObstacle(xMm, yMm, obstacle) {
+        if (obstacle.type === "rect") {
+          return xMm >= obstacle.x1 && xMm <= obstacle.x2 && yMm >= obstacle.y1 && yMm <= obstacle.y2;
+        }
+
+        const dx = xMm - obstacle.x;
+        const dy = yMm - obstacle.y;
+
+        return ((dx * dx) + (dy * dy)) <= (obstacle.r * obstacle.r);
+      }
+
+      function distanceToObstacle(xMm, yMm, obstacle) {
+        if (obstacle.type === "rect") {
+          const dx = Math.max(obstacle.x1 - xMm, 0, xMm - obstacle.x2);
+          const dy = Math.max(obstacle.y1 - yMm, 0, yMm - obstacle.y2);
+
+          return Math.hypot(dx, dy);
+        }
+
+        return Math.max(0, Math.hypot(xMm - obstacle.x, yMm - obstacle.y) - obstacle.r);
+      }
+
+      function distanceToAnyObstacle(xMm, yMm) {
+        let bestDistance = Number.POSITIVE_INFINITY;
+        let index = 0;
+
+        for (index = 0; index < state.obstacles.length; index += 1) {
+          bestDistance = Math.min(bestDistance, distanceToObstacle(xMm, yMm, state.obstacles[index]));
+        }
+
+        return bestDistance;
+      }
+
+      function readPointsFromInputs() {
+        state.start = {
+          x: roundToGridMm(readNumber(el.startX, state.start.x, 0, MAP_X_MAX_MM), MAP_X_MAX_MM),
+          y: roundToGridMm(readNumber(el.startY, state.start.y, 0, MAP_Y_MAX_MM), MAP_Y_MAX_MM)
+        };
+        state.goal = {
+          x: roundToGridMm(readNumber(el.goalX, state.goal.x, 0, MAP_X_MAX_MM), MAP_X_MAX_MM),
+          y: roundToGridMm(readNumber(el.goalY, state.goal.y, 0, MAP_Y_MAX_MM), MAP_Y_MAX_MM)
+        };
+
+        syncPointInputs();
+      }
+
+      function syncPointInputs() {
+        el.startX.value = String(state.start.x);
+        el.startY.value = String(state.start.y);
+        el.goalX.value = String(state.goal.x);
+        el.goalY.value = String(state.goal.y);
+      }
+
+      function readCostSettings() {
+        return {
+          fixedRadius: readNumber(el.fixedRadius, 200, 0, 1000),
+          fixedPenalty: Math.round(readNumber(el.fixedPenalty, 80, 0, 1000)),
+          gradientRadius: readNumber(el.gradientRadius, 200, 0, 1000),
+          gradientMaxPenalty: Math.round(readNumber(el.gradientMaxPenalty, 120, 0, 1000))
+        };
+      }
+
+      function rebuildMaps() {
+        const settings = readCostSettings();
+        let gridX = 0;
+        let gridY = 0;
+
+        state.obstacleMap.fill(0);
+        state.fixedPenaltyMap.fill(0);
+        state.gradientPenaltyMap.fill(0);
+
+        for (gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+          for (gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+            const xMm = gridToMm(gridX);
+            const yMm = gridToMm(gridY);
+            const index = cellIndex(gridX, gridY);
+            let obstacleIndex = 0;
+            let blocked = false;
+            let nearest = Number.POSITIVE_INFINITY;
+
+            for (obstacleIndex = 0; obstacleIndex < state.obstacles.length; obstacleIndex += 1) {
+              const obstacle = state.obstacles[obstacleIndex];
+
+              if (pointInsideObstacle(xMm, yMm, obstacle)) {
+                blocked = true;
+              }
+
+              nearest = Math.min(nearest, distanceToObstacle(xMm, yMm, obstacle));
+            }
+
+            state.nearestDistance[index] = nearest;
+            if (blocked) {
+              state.obstacleMap[index] = 1;
+              continue;
+            }
+
+            if (nearest <= settings.fixedRadius) {
+              state.fixedPenaltyMap[index] = settings.fixedPenalty;
+            }
+
+            if (settings.gradientRadius > 0 && nearest < settings.gradientRadius) {
+              const ratio = 1 - (nearest / settings.gradientRadius);
+              state.gradientPenaltyMap[index] = Math.round(settings.gradientMaxPenalty * ratio * ratio);
+            }
+          }
+        }
+      }
+
+      function heuristic(gridX, gridY, goalX, goalY) {
+        const diffX = Math.abs(goalX - gridX);
+        const diffY = Math.abs(goalY - gridY);
+        const minDiff = Math.min(diffX, diffY);
+        const maxDiff = Math.max(diffX, diffY);
+
+        return (ASTAR_DIAGONAL_COST * minDiff) + (ASTAR_STRAIGHT_COST * (maxDiff - minDiff));
+      }
+
+      function canStep(currentX, currentY, stepX, stepY) {
+        const nextX = currentX + stepX;
+        const nextY = currentY + stepY;
+
+        if (!isGridValid(nextX, nextY) || isObstacleGrid(nextX, nextY)) {
+          return false;
+        }
+
+        if (stepX !== 0 && stepY !== 0) {
+          if (isObstacleGrid(currentX + stepX, currentY) || isObstacleGrid(currentX, currentY + stepY)) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      function popBestOpen(openList, gCost, goalX, goalY) {
+        let bestOpenIndex = 0;
+        let bestFCost = INF_COST;
+        let bestHCost = INF_COST;
+        let openIndex = 0;
+
+        for (openIndex = 0; openIndex < openList.length; openIndex += 1) {
+          const nodeIndex = openList[openIndex];
+          const nodeX = nodeIndex % GRID_X_COUNT;
+          const nodeY = Math.floor(nodeIndex / GRID_X_COUNT);
+          const hCost = heuristic(nodeX, nodeY, goalX, goalY);
+          const fCost = gCost[nodeIndex] + hCost;
+
+          if (fCost < bestFCost || (fCost === bestFCost && hCost < bestHCost)) {
+            bestFCost = fCost;
+            bestHCost = hCost;
+            bestOpenIndex = openIndex;
+          }
+        }
+
+        const bestIndex = openList[bestOpenIndex];
+        openList[bestOpenIndex] = openList[openList.length - 1];
+        openList.pop();
+
+        return bestIndex;
+      }
+
+      function reconstructPath(parent, startIndex, goalIndex) {
+        const reverse = [];
+        let currentIndex = goalIndex;
+        let guard = 0;
+
+        while (currentIndex >= 0 && guard < NODE_COUNT) {
+          const gridX = currentIndex % GRID_X_COUNT;
+          const gridY = Math.floor(currentIndex / GRID_X_COUNT);
+
+          reverse.push({ x: gridToMm(gridX), y: gridToMm(gridY) });
+          if (currentIndex === startIndex) {
+            break;
+          }
+
+          currentIndex = parent[currentIndex];
+          guard += 1;
+        }
+
+        return reverse.reverse();
+      }
+
+      function pathLengthMm(path) {
+        let total = 0;
+        let index = 1;
+
+        for (index = 1; index < path.length; index += 1) {
+          total += Math.hypot(path[index].x - path[index - 1].x, path[index].y - path[index - 1].y);
+        }
+
+        return total;
+      }
+
+      function pathMinClearanceMm(path) {
+        if (state.obstacles.length === 0 || path.length === 0) {
+          return null;
+        }
+
+        let bestDistance = Number.POSITIVE_INFINITY;
+        let segmentIndex = 1;
+
+        if (path.length === 1) {
+          return distanceToAnyObstacle(path[0].x, path[0].y);
+        }
+
+        for (segmentIndex = 1; segmentIndex < path.length; segmentIndex += 1) {
+          const start = path[segmentIndex - 1];
+          const end = path[segmentIndex];
+          const segmentLength = Math.max(1, Math.hypot(end.x - start.x, end.y - start.y));
+          const sampleCount = Math.max(1, Math.ceil(segmentLength / MAP_RESOLUTION_MM));
+          let sampleIndex = 0;
+
+          for (sampleIndex = 0; sampleIndex <= sampleCount; sampleIndex += 1) {
+            const t = sampleIndex / sampleCount;
+            const xMm = start.x + ((end.x - start.x) * t);
+            const yMm = start.y + ((end.y - start.y) * t);
+
+            bestDistance = Math.min(bestDistance, distanceToAnyObstacle(xMm, yMm));
+          }
+        }
+
+        return bestDistance;
+      }
+
+      function collectGridLineCells(startGrid, endGrid) {
+        const cells = [];
+        let gridX = startGrid.gx;
+        let gridY = startGrid.gy;
+        const endX = endGrid.gx;
+        const endY = endGrid.gy;
+        const deltaX = endX - gridX;
+        const deltaY = endY - gridY;
+        const stepX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
+        const stepY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
+        const absDeltaX = Math.abs(deltaX);
+        const absDeltaY = Math.abs(deltaY);
+        const tDeltaX = absDeltaX > 0 ? 1 / absDeltaX : Number.POSITIVE_INFINITY;
+        const tDeltaY = absDeltaY > 0 ? 1 / absDeltaY : Number.POSITIVE_INFINITY;
+        let tMaxX = absDeltaX > 0 ? 0.5 / absDeltaX : Number.POSITIVE_INFINITY;
+        let tMaxY = absDeltaY > 0 ? 0.5 / absDeltaY : Number.POSITIVE_INFINITY;
+
+        if (isObstacleGrid(gridX, gridY) || isObstacleGrid(endX, endY)) {
+          return null;
+        }
+
+        cells.push({ gx: gridX, gy: gridY });
+        while (gridX !== endX || gridY !== endY) {
+          if (tMaxX < tMaxY) {
+            gridX += stepX;
+            tMaxX += tDeltaX;
+          } else if (tMaxY < tMaxX) {
+            gridY += stepY;
+            tMaxY += tDeltaY;
+          } else {
+            if (isObstacleGrid(gridX + stepX, gridY) || isObstacleGrid(gridX, gridY + stepY)) {
+              return null;
+            }
+
+            gridX += stepX;
+            gridY += stepY;
+            tMaxX += tDeltaX;
+            tMaxY += tDeltaY;
+          }
+
+          if (isObstacleGrid(gridX, gridY)) {
+            return null;
+          }
+
+          cells.push({ gx: gridX, gy: gridY });
+        }
+
+        return cells;
+      }
+
+      function isLineOfSightClear(start, end) {
+        return collectGridLineCells(pointToGrid(start), pointToGrid(end)) !== null;
+      }
+
+      function shortcutPathByLineOfSight(points) {
+        const pruned = [];
+        let anchorIndex = 0;
+
+        if (points.length <= 2) {
+          return points.slice();
+        }
+
+        pruned.push(points[0]);
+        while (anchorIndex < points.length - 1) {
+          let candidateIndex = points.length - 1;
+
+          while (candidateIndex > anchorIndex + 1 &&
+                 !isLineOfSightClear(points[anchorIndex], points[candidateIndex])) {
+            candidateIndex -= 1;
+          }
+
+          pruned.push(points[candidateIndex]);
+          anchorIndex = candidateIndex;
+        }
+
+        return pruned;
+      }
+
+      function readShortcutSettings() {
+        return {
+          mode: el.shortcutMode.value,
+          costRatio: readNumber(el.shortcutCostRatio, 1.05, 1, 2)
+        };
+      }
+
+      function calculateCellsCost(cells, penaltyMap) {
+        let totalCost = 0;
+        let previousGrid = null;
+        let cellIndexInLine = 0;
+
+        if (cells === null) {
+          return INF_COST;
+        }
+
+        for (cellIndexInLine = 0; cellIndexInLine < cells.length; cellIndexInLine += 1) {
+          const cell = cells[cellIndexInLine];
+
+          if (previousGrid === null) {
+            previousGrid = cell;
+            continue;
+          }
+
+          if (cell.gx === previousGrid.gx && cell.gy === previousGrid.gy) {
+            continue;
+          }
+
+          const stepCost = (cell.gx !== previousGrid.gx && cell.gy !== previousGrid.gy)
+            ? ASTAR_DIAGONAL_COST
+            : ASTAR_STRAIGHT_COST;
+
+          totalCost += stepCost + penaltyMap[cellIndex(cell.gx, cell.gy)];
+          previousGrid = cell;
+        }
+
+        return totalCost;
+      }
+
+      function calculateSegmentCost(start, end, penaltyMap) {
+        return calculateCellsCost(collectGridLineCells(pointToGrid(start), pointToGrid(end)), penaltyMap);
+      }
+
+      function calculatePolylineCost(path, penaltyMap) {
+        let totalCost = 0;
+        let segmentIndex = 1;
+
+        if (path.length <= 1) {
+          return 0;
+        }
+
+        for (segmentIndex = 1; segmentIndex < path.length; segmentIndex += 1) {
+          const segmentCost = calculateSegmentCost(path[segmentIndex - 1], path[segmentIndex], penaltyMap);
+
+          if (!Number.isFinite(segmentCost)) {
+            return INF_COST;
+          }
+
+          totalCost += segmentCost;
+        }
+
+        return totalCost;
+      }
+
+      function buildPathCostPrefix(points, penaltyMap) {
+        const prefix = new Array(points.length).fill(0);
+        let index = 1;
+
+        for (index = 1; index < points.length; index += 1) {
+          prefix[index] = prefix[index - 1] + calculateSegmentCost(points[index - 1], points[index], penaltyMap);
+        }
+
+        return prefix;
+      }
+
+      function lineEntersPenaltyArea(cells, penaltyMap) {
+        let index = 1;
+
+        if (cells === null) {
+          return true;
+        }
+
+        for (index = 1; index < cells.length - 1; index += 1) {
+          const cell = cells[index];
+
+          if (penaltyMap[cellIndex(cell.gx, cell.gy)] > 0) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+      function shortcutPathByCost(points, penaltyMap, mode, costRatio) {
+        const pruned = [];
+        const costPrefix = buildPathCostPrefix(points, penaltyMap);
+        let anchorIndex = 0;
+
+        if (points.length <= 2 || mode === "none") {
+          return points.slice();
+        }
+
+        if (mode === "plain") {
+          return shortcutPathByLineOfSight(points);
+        }
+
+        pruned.push(points[0]);
+        while (anchorIndex < points.length - 1) {
+          let candidateIndex = points.length - 1;
+
+          while (candidateIndex > anchorIndex + 1) {
+            const cells = collectGridLineCells(pointToGrid(points[anchorIndex]), pointToGrid(points[candidateIndex]));
+            const lineCost = calculateCellsCost(cells, penaltyMap);
+            const rawCost = costPrefix[candidateIndex] - costPrefix[anchorIndex];
+            const inPenaltyArea = lineEntersPenaltyArea(cells, penaltyMap);
+            const canUseLine = Number.isFinite(lineCost) &&
+              ((mode === "avoid-cost" && !inPenaltyArea) ||
+               (mode === "cost" && lineCost <= rawCost * costRatio));
+
+            if (canUseLine) {
+              break;
+            }
+
+            candidateIndex -= 1;
+          }
+
+          pruned.push(points[candidateIndex]);
+          anchorIndex = candidateIndex;
+        }
+
+        return pruned;
+      }
+
+      function findAstarPath(strategy) {
+        const penaltyMap = strategy === "fixed" ? state.fixedPenaltyMap : state.gradientPenaltyMap;
+        const startGrid = pointToGrid(state.start);
+        const goalGrid = pointToGrid(state.goal);
+        const startIndex = cellIndex(startGrid.gx, startGrid.gy);
+        const goalIndex = cellIndex(goalGrid.gx, goalGrid.gy);
+        const nodeState = new Uint8Array(NODE_COUNT);
+        const closedMap = new Uint8Array(NODE_COUNT);
+        const gCost = new Float64Array(NODE_COUNT);
+        const parent = new Int32Array(NODE_COUNT);
+        const openList = [];
+        let visitedCount = 0;
+
+        if (state.obstacleMap[startIndex] !== 0) {
+          return { ok: false, reason: "起点在障碍物内", path: [], closedMap, visitedCount: 0 };
+        }
+
+        if (state.obstacleMap[goalIndex] !== 0) {
+          return { ok: false, reason: "终点在障碍物内", path: [], closedMap, visitedCount: 0 };
+        }
+
+        gCost.fill(INF_COST);
+        parent.fill(-1);
+        gCost[startIndex] = 0;
+        nodeState[startIndex] = STATE_OPEN;
+        openList.push(startIndex);
+
+        while (openList.length > 0) {
+          const currentIndex = popBestOpen(openList, gCost, goalGrid.gx, goalGrid.gy);
+          const currentX = currentIndex % GRID_X_COUNT;
+          const currentY = Math.floor(currentIndex / GRID_X_COUNT);
+          let dirIndex = 0;
+
+          if (closedMap[currentIndex] === 0) {
+            closedMap[currentIndex] = 1;
+            visitedCount += 1;
+          }
+
+          if (currentIndex === goalIndex) {
+            const rawPath = reconstructPath(parent, startIndex, goalIndex);
+            const shortcutSettings = readShortcutSettings();
+            const path = shortcutPathByCost(rawPath,
+                                            penaltyMap,
+                                            shortcutSettings.mode,
+                                            shortcutSettings.costRatio);
+
+            return {
+              ok: true,
+              reason: "规划完成",
+              path,
+              rawPath,
+              closedMap,
+              visitedCount,
+              rawTotalCost: gCost[goalIndex],
+              totalCost: calculatePolylineCost(path, penaltyMap),
+              lengthMm: pathLengthMm(path),
+              rawLengthMm: pathLengthMm(rawPath),
+              minClearanceMm: pathMinClearanceMm(path),
+              rawMinClearanceMm: pathMinClearanceMm(rawPath)
+            };
+          }
+
+          nodeState[currentIndex] = STATE_CLOSED;
+
+          for (dirIndex = 0; dirIndex < dirOffsets.length; dirIndex += 1) {
+            const dir = dirOffsets[dirIndex];
+
+            if (!canStep(currentX, currentY, dir.gx, dir.gy)) {
+              continue;
+            }
+
+            const nextX = currentX + dir.gx;
+            const nextY = currentY + dir.gy;
+            const nextIndex = cellIndex(nextX, nextY);
+
+            if (nodeState[nextIndex] === STATE_CLOSED) {
+              continue;
+            }
+
+            const tentativeCost = gCost[currentIndex] + dir.cost + penaltyMap[nextIndex];
+            if (nodeState[nextIndex] === STATE_NONE || tentativeCost < gCost[nextIndex]) {
+              parent[nextIndex] = currentIndex;
+              gCost[nextIndex] = tentativeCost;
+
+              if (nodeState[nextIndex] === STATE_NONE) {
+                nodeState[nextIndex] = STATE_OPEN;
+                openList.push(nextIndex);
+              }
+            }
+          }
+        }
+
+        return { ok: false, reason: "未找到可通行路径", path: [], closedMap, visitedCount };
+      }
+
+      function formatMm(value) {
+        if (value === null || value === undefined || !Number.isFinite(value)) {
+          return "-";
+        }
+
+        return `${Math.round(value)}mm`;
+      }
+
+      function formatCost(value) {
+        if (!Number.isFinite(value)) {
+          return "-";
+        }
+
+        return String(Math.round(value));
+      }
+
+      function updateResultPanel(prefix, result) {
+        const stateNode = prefix === "fixed" ? el.fixedState : el.gradientState;
+        const lengthNode = prefix === "fixed" ? el.fixedLength : el.gradientLength;
+        const costNode = prefix === "fixed" ? el.fixedCost : el.gradientCost;
+        const clearanceNode = prefix === "fixed" ? el.fixedClearance : el.gradientClearance;
+        const visitedNode = prefix === "fixed" ? el.fixedVisited : el.gradientVisited;
+
+        if (result.ok && result.rawPath && result.rawPath.length !== result.path.length) {
+          stateNode.textContent = `原 ${result.rawPath.length} / 显 ${result.path.length} 点`;
+        } else {
+          stateNode.textContent = result.ok ? `${result.path.length} 点` : result.reason;
+        }
+
+        lengthNode.textContent = result.ok ? formatMm(result.lengthMm) : "-";
+        costNode.textContent = result.ok ? formatCost(result.totalCost) : "-";
+        clearanceNode.textContent = result.ok ? formatMm(result.minClearanceMm) : "-";
+        visitedNode.textContent = String(result.visitedCount);
+      }
+
+      function setStatus(message, kind) {
+        el.statusBox.textContent = message;
+        el.statusBox.classList.remove("ok", "bad");
+
+        if (kind) {
+          el.statusBox.classList.add(kind);
+        }
+      }
+
+      function planAll() {
+        readPointsFromInputs();
+        rebuildMaps();
+
+        const startTime = performance.now();
+        state.fixedResult = findAstarPath("fixed");
+        state.gradientResult = findAstarPath("gradient");
+        const elapsedMs = performance.now() - startTime;
+
+        updateResultPanel("fixed", state.fixedResult);
+        updateResultPanel("gradient", state.gradientResult);
+        renderObstacleList();
+        drawAll();
+
+        if (state.fixedResult.ok && state.gradientResult.ok) {
+          setStatus(`两种策略规划完成，用时 ${elapsedMs.toFixed(1)}ms`, "ok");
+        } else {
+          setStatus(`固定：${state.fixedResult.reason}；梯度：${state.gradientResult.reason}`, "bad");
+        }
+      }
+
+      function getCanvasPlot(canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.max(320, Math.floor(rect.width * ratio));
+        const height = Math.max(240, Math.floor(rect.height * ratio));
+
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+
+        const cssWidth = width / ratio;
+        const cssHeight = height / ratio;
+        const padLeft = 54;
+        const padRight = 18;
+        const padTop = 20;
+        const padBottom = 44;
+        const availableW = cssWidth - padLeft - padRight;
+        const availableH = cssHeight - padTop - padBottom;
+        const mapAspect = MAP_Y_MAX_MM / MAP_X_MAX_MM;
+        let plotW = availableW;
+        let plotH = plotW / mapAspect;
+
+        if (plotH > availableH) {
+          plotH = availableH;
+          plotW = plotH * mapAspect;
+        }
+
+        return {
+          ratio,
+          cssWidth,
+          cssHeight,
+          x: padLeft + ((availableW - plotW) * 0.5),
+          y: padTop + ((availableH - plotH) * 0.5),
+          w: plotW,
+          h: plotH
+        };
+      }
+
+      function mapToCanvas(point, plot) {
+        return {
+          x: plot.x + ((point.y / MAP_Y_MAX_MM) * plot.w),
+          y: plot.y + plot.h - ((point.x / MAP_X_MAX_MM) * plot.h)
+        };
+      }
+
+      function canvasToMap(canvasX, canvasY, plot) {
+        return {
+          x: clamp(((plot.y + plot.h - canvasY) / plot.h) * MAP_X_MAX_MM, 0, MAP_X_MAX_MM),
+          y: clamp(((canvasX - plot.x) / plot.w) * MAP_Y_MAX_MM, 0, MAP_Y_MAX_MM)
+        };
+      }
+
+      function drawGrid(ctx, plot) {
+        const axisStep = 500;
+        let xMm = 0;
+        let yMm = 0;
+
+        ctx.fillStyle = "#f8faf5";
+        ctx.fillRect(0, 0, plot.cssWidth, plot.cssHeight);
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#cfd8d0";
+        ctx.lineWidth = 1;
+        ctx.fillRect(plot.x, plot.y, plot.w, plot.h);
+        ctx.strokeRect(plot.x, plot.y, plot.w, plot.h);
+        ctx.strokeStyle = "#e1e7df";
+        ctx.fillStyle = "#6a756d";
+        ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        for (yMm = 0; yMm <= MAP_Y_MAX_MM; yMm += axisStep) {
+          const p0 = mapToCanvas({ x: 0, y: yMm }, plot);
+
+          ctx.beginPath();
+          ctx.moveTo(p0.x, plot.y);
+          ctx.lineTo(p0.x, plot.y + plot.h);
+          ctx.stroke();
+          ctx.fillText(String(yMm), p0.x, plot.y + plot.h + 8);
+        }
+
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        for (xMm = 0; xMm <= MAP_X_MAX_MM; xMm += axisStep) {
+          const p0 = mapToCanvas({ x: xMm, y: 0 }, plot);
+
+          ctx.beginPath();
+          ctx.moveTo(plot.x, p0.y);
+          ctx.lineTo(plot.x + plot.w, p0.y);
+          ctx.stroke();
+          ctx.fillText(String(xMm), plot.x - 8, p0.y);
+        }
+      }
+
+      function cellRect(gridX, gridY, plot) {
+        const cellW = plot.w / GRID_Y_MAX;
+        const cellH = plot.h / GRID_X_MAX;
+        const center = mapToCanvas({ x: gridToMm(gridX), y: gridToMm(gridY) }, plot);
+
+        return {
+          x: center.x - (cellW * 0.5),
+          y: center.y - (cellH * 0.5),
+          w: Math.max(1, cellW + 0.35),
+          h: Math.max(1, cellH + 0.35)
+        };
+      }
+
+      function heatColor(value, maxValue) {
+        const ratio = maxValue > 0 ? clamp(value / maxValue, 0, 1) : 0;
+        const red = 255;
+        const green = Math.round(220 - (140 * ratio));
+        const blue = Math.round(76 - (58 * ratio));
+        const alpha = 0.18 + (0.46 * ratio);
+
+        return `rgba(${red},${green},${blue},${alpha})`;
+      }
+
+      function drawPenaltyMap(ctx, plot, penaltyMap, maxPenalty) {
+        let gridX = 0;
+        let gridY = 0;
+
+        for (gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+          for (gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+            const index = cellIndex(gridX, gridY);
+            const penalty = penaltyMap[index];
+
+            if (penalty <= 0 || state.obstacleMap[index] !== 0) {
+              continue;
+            }
+
+            const rect = cellRect(gridX, gridY, plot);
+            ctx.fillStyle = heatColor(penalty, maxPenalty);
+            ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+          }
+        }
+      }
+
+      function drawVisitedMap(ctx, plot, result) {
+        let gridX = 0;
+        let gridY = 0;
+
+        if (!result || !result.closedMap) {
+          return;
+        }
+
+        ctx.fillStyle = "rgba(77, 123, 217, 0.16)";
+        for (gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+          for (gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+            const index = cellIndex(gridX, gridY);
+
+            if (result.closedMap[index] === 0 || state.obstacleMap[index] !== 0) {
+              continue;
+            }
+
+            const rect = cellRect(gridX, gridY, plot);
+            ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+          }
+        }
+      }
+
+      function drawObstacles(ctx, plot) {
+        let gridX = 0;
+        let gridY = 0;
+
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--obstacle").trim();
+        for (gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+          for (gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+            if (state.obstacleMap[cellIndex(gridX, gridY)] === 0) {
+              continue;
+            }
+
+            const rect = cellRect(gridX, gridY, plot);
+            ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+          }
+        }
+
+        ctx.strokeStyle = "rgba(255,255,255,0.62)";
+        ctx.lineWidth = 1;
+        state.obstacles.forEach((obstacle) => {
+          if (obstacle.type === "rect") {
+            const p1 = mapToCanvas({ x: obstacle.x1, y: obstacle.y1 }, plot);
+            const p2 = mapToCanvas({ x: obstacle.x2, y: obstacle.y2 }, plot);
+            const x = Math.min(p1.x, p2.x);
+            const y = Math.min(p1.y, p2.y);
+            const w = Math.abs(p2.x - p1.x);
+            const h = Math.abs(p2.y - p1.y);
+
+            ctx.strokeRect(x, y, w, h);
+          } else {
+            const center = mapToCanvas({ x: obstacle.x, y: obstacle.y }, plot);
+            const rx = (obstacle.r / MAP_Y_MAX_MM) * plot.w;
+            const ry = (obstacle.r / MAP_X_MAX_MM) * plot.h;
+
+            ctx.beginPath();
+            ctx.ellipse(center.x, center.y, rx, ry, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        });
+      }
+
+      function drawPolyline(ctx, plot, points, color, width, dash) {
+        if (!points || points.length === 0) {
+          return;
+        }
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.setLineDash(dash || []);
+        ctx.beginPath();
+        points.forEach((point, index) => {
+          const pos = mapToCanvas(point, plot);
+
+          if (index === 0) {
+            ctx.moveTo(pos.x, pos.y);
+          } else {
+            ctx.lineTo(pos.x, pos.y);
+          }
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      function drawPath(ctx, plot, result, color) {
+        if (!result || !result.ok || result.path.length === 0) {
+          return;
+        }
+
+        if (result.rawPath && result.rawPath.length > result.path.length) {
+          drawPolyline(ctx, plot, result.rawPath, "rgba(34, 40, 36, 0.45)", 2, [7, 5]);
+        }
+
+        drawPolyline(ctx, plot, result.path, color, 3, []);
+
+        ctx.fillStyle = color;
+        result.path.forEach((point) => {
+          const pos = mapToCanvas(point, plot);
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      function drawPointMarker(ctx, plot, point, color, label) {
+        const pos = mapToCanvas(point, plot);
+
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "700 10px Segoe UI, Microsoft YaHei, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, pos.x, pos.y + 0.2);
+      }
+
+      function drawHover(ctx, plot) {
+        if (!state.hover) {
+          return;
+        }
+
+        const pos = mapToCanvas({ x: state.hover.x, y: state.hover.y }, plot);
+
+        if (pos.x < plot.x || pos.x > plot.x + plot.w || pos.y < plot.y || pos.y > plot.y + plot.h) {
+          return;
+        }
+
+        ctx.strokeStyle = "rgba(24, 33, 29, 0.7)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pos.x - 8, pos.y);
+        ctx.lineTo(pos.x + 8, pos.y);
+        ctx.moveTo(pos.x, pos.y - 8);
+        ctx.lineTo(pos.x, pos.y + 8);
+        ctx.stroke();
+      }
+
+      function roundedRectPath(ctx, x, y, width, height, radius) {
+        const r = Math.min(radius, width * 0.5, height * 0.5);
+
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + width - r, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+        ctx.lineTo(x + width, y + height - r);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+        ctx.lineTo(x + r, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+      }
+
+      function drawLegend(ctx, plot, strategy) {
+        const x = plot.x + 10;
+        const y = plot.y + 10;
+
+        ctx.save();
+        ctx.fillStyle = "rgba(255,255,255,0.88)";
+        ctx.strokeStyle = "rgba(207,216,208,0.9)";
+        ctx.lineWidth = 1;
+        roundedRectPath(ctx, x, y, 174, 58, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = "12px Segoe UI, Microsoft YaHei, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#18211d";
+        ctx.fillText(strategy === "fixed" ? "固定阈值" : "梯度惩罚", x + 10, y + 15);
+        ctx.fillStyle = "#111111";
+        ctx.fillRect(x + 10, y + 30, 14, 10);
+        ctx.fillStyle = "#68736d";
+        ctx.fillText("障碍", x + 30, y + 35);
+        ctx.fillStyle = "rgba(255,120,20,0.55)";
+        ctx.fillRect(x + 82, y + 30, 14, 10);
+        ctx.fillStyle = "#68736d";
+        ctx.fillText("软代价", x + 102, y + 35);
+        ctx.restore();
+      }
+
+      function drawCanvas(canvas, strategy) {
+        const ctx = canvas.getContext("2d");
+        const plot = getCanvasPlot(canvas);
+        const result = strategy === "fixed" ? state.fixedResult : state.gradientResult;
+        const penaltyMap = strategy === "fixed" ? state.fixedPenaltyMap : state.gradientPenaltyMap;
+        const settings = readCostSettings();
+        const maxPenalty = strategy === "fixed" ? settings.fixedPenalty : settings.gradientMaxPenalty;
+        const pathColor = strategy === "fixed" ? "#2d6cdf" : "#16835f";
+
+        ctx.setTransform(plot.ratio, 0, 0, plot.ratio, 0, 0);
+        ctx.clearRect(0, 0, plot.cssWidth, plot.cssHeight);
+        drawGrid(ctx, plot);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(plot.x, plot.y, plot.w, plot.h);
+        ctx.clip();
+
+        if (el.showHeat.checked) {
+          drawPenaltyMap(ctx, plot, penaltyMap, maxPenalty);
+        }
+
+        if (el.showSearch.checked) {
+          drawVisitedMap(ctx, plot, result);
+        }
+
+        drawObstacles(ctx, plot);
+        drawPath(ctx, plot, result, pathColor);
+        drawPointMarker(ctx, plot, state.start, "#0f9f6e", "S");
+        drawPointMarker(ctx, plot, state.goal, "#d13f2f", "G");
+        drawHover(ctx, plot);
+        drawLegend(ctx, plot, strategy);
+        ctx.restore();
+      }
+
+      function drawAll() {
+        state.drawPending = false;
+        drawCanvas(el.fixedCanvas, "fixed");
+        drawCanvas(el.gradientCanvas, "gradient");
+      }
+
+      function requestDrawAll() {
+        if (state.drawPending) {
+          return;
+        }
+
+        state.drawPending = true;
+        requestAnimationFrame(drawAll);
+      }
+
+      function requestPlanAll() {
+        window.clearTimeout(state.planTimer);
+        state.planTimer = window.setTimeout(() => {
+          state.planTimer = 0;
+          planAll();
+        }, 80);
+      }
+
+      function renderObstacleList() {
+        el.obstacleList.innerHTML = "";
+
+        if (state.obstacles.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "status";
+          empty.textContent = "无障碍";
+          el.obstacleList.appendChild(empty);
+          return;
+        }
+
+        state.obstacles.forEach((obstacle) => {
+          const item = document.createElement("div");
+          const text = document.createElement("div");
+          const button = document.createElement("button");
+
+          item.className = "obstacle-item";
+          text.className = "obstacle-text";
+          text.textContent = obstacleLabel(obstacle);
+          button.className = "delete-btn";
+          button.type = "button";
+          button.textContent = "删除";
+          button.dataset.id = String(obstacle.id);
+          item.appendChild(text);
+          item.appendChild(button);
+          el.obstacleList.appendChild(item);
+        });
+      }
+
+      function updateHoverBox() {
+        if (!state.hover) {
+          el.hoverBox.textContent = "-";
+          return;
+        }
+
+        const index = cellIndex(state.hover.gx, state.hover.gy);
+        const blocked = state.obstacleMap[index] !== 0 ? "是" : "否";
+        const distance = Number.isFinite(state.nearestDistance[index])
+          ? `${Math.round(state.nearestDistance[index])}mm`
+          : "-";
+
+        el.hoverBox.textContent = `栅格 ${state.hover.gx},${state.hover.gy}  坐标 ${state.hover.x},${state.hover.y}mm  障碍 ${blocked}  距离 ${distance}  固定 ${state.fixedPenaltyMap[index]}  梯度 ${state.gradientPenaltyMap[index]}`;
+      }
+
+      function handleCanvasMove(event) {
+        const canvas = event.currentTarget;
+        const rect = canvas.getBoundingClientRect();
+        const plot = getCanvasPlot(canvas);
+        const canvasX = event.clientX - rect.left;
+        const canvasY = event.clientY - rect.top;
+
+        if (canvasX < plot.x || canvasX > plot.x + plot.w || canvasY < plot.y || canvasY > plot.y + plot.h) {
+          state.hover = null;
+          updateHoverBox();
+          requestDrawAll();
+          return;
+        }
+
+        const point = canvasToMap(canvasX, canvasY, plot);
+        const gx = mmToGrid(point.x, MAP_X_MAX_MM);
+        const gy = mmToGrid(point.y, MAP_Y_MAX_MM);
+
+        state.hover = {
+          gx,
+          gy,
+          x: gridToMm(gx),
+          y: gridToMm(gy)
+        };
+        updateHoverBox();
+        requestDrawAll();
+      }
+
+      function handleCanvasLeave() {
+        state.hover = null;
+        updateHoverBox();
+        requestDrawAll();
+      }
+
+      function handleCanvasClick(event) {
+        const canvas = event.currentTarget;
+        const rect = canvas.getBoundingClientRect();
+        const plot = getCanvasPlot(canvas);
+        const canvasX = event.clientX - rect.left;
+        const canvasY = event.clientY - rect.top;
+
+        if (canvasX < plot.x || canvasX > plot.x + plot.w || canvasY < plot.y || canvasY > plot.y + plot.h) {
+          return;
+        }
+
+        const point = canvasToMap(canvasX, canvasY, plot);
+        const gridPoint = {
+          x: gridToMm(mmToGrid(point.x, MAP_X_MAX_MM)),
+          y: gridToMm(mmToGrid(point.y, MAP_Y_MAX_MM))
+        };
+
+        if (state.clickMode === "start") {
+          state.start = gridPoint;
+        } else {
+          state.goal = gridPoint;
+        }
+
+        syncPointInputs();
+        planAll();
+      }
+
+      function addObstacle() {
+        const type = el.obstacleType.value;
+        const nameValue = el.obstacleName.value.trim();
+        const id = state.nextObstacleId;
+        let obstacle = null;
+
+        state.nextObstacleId += 1;
+        if (type === "rect") {
+          const x1 = readNumber(el.rectX1, 0, 0, MAP_X_MAX_MM);
+          const y1 = readNumber(el.rectY1, 0, 0, MAP_Y_MAX_MM);
+          const x2 = readNumber(el.rectX2, 0, 0, MAP_X_MAX_MM);
+          const y2 = readNumber(el.rectY2, 0, 0, MAP_Y_MAX_MM);
+
+          obstacle = {
+            id,
+            type: "rect",
+            name: nameValue || `矩形${id}`,
+            x1: Math.min(x1, x2),
+            y1: Math.min(y1, y2),
+            x2: Math.max(x1, x2),
+            y2: Math.max(y1, y2)
+          };
+        } else {
+          obstacle = {
+            id,
+            type: "circle",
+            name: nameValue || `圆形${id}`,
+            x: readNumber(el.circleX, 1200, 0, MAP_X_MAX_MM),
+            y: readNumber(el.circleY, 2500, 0, MAP_Y_MAX_MM),
+            r: readNumber(el.circleR, 200, 1, 2000)
+          };
+        }
+
+        state.obstacles.push(obstacle);
+        el.obstacleName.value = "";
+        planAll();
+      }
+
+      function setObstaclesFromDefs(defs) {
+        state.nextObstacleId = 1;
+        state.obstacles = cloneObstacleDefs(defs);
+        planAll();
+      }
+
+      function attachEvents() {
+        [el.fixedCanvas, el.gradientCanvas].forEach((canvas) => {
+          canvas.addEventListener("mousemove", handleCanvasMove);
+          canvas.addEventListener("mouseleave", handleCanvasLeave);
+          canvas.addEventListener("click", handleCanvasClick);
+        });
+
+        el.clickModeGroup.addEventListener("click", (event) => {
+          const button = event.target.closest("button[data-mode]");
+
+          if (!button) {
+            return;
+          }
+
+          state.clickMode = button.dataset.mode;
+          el.clickModeGroup.querySelectorAll("button").forEach((item) => {
+            item.classList.toggle("active", item === button);
+          });
+        });
+
+        [el.startX, el.startY, el.goalX, el.goalY].forEach((input) => {
+          input.addEventListener("change", planAll);
+        });
+
+        [el.fixedRadius, el.fixedPenalty, el.gradientRadius, el.gradientMaxPenalty].forEach((input) => {
+          input.addEventListener("input", requestPlanAll);
+        });
+
+        [el.showHeat, el.showSearch].forEach((input) => {
+          input.addEventListener("change", requestDrawAll);
+        });
+
+        el.shortcutMode.addEventListener("change", planAll);
+        el.shortcutCostRatio.addEventListener("input", requestPlanAll);
+
+        el.obstacleType.addEventListener("change", () => {
+          const isRect = el.obstacleType.value === "rect";
+
+          el.rectFields.classList.toggle("hidden", !isRect);
+          el.circleFields.classList.toggle("hidden", isRect);
+        });
+
+        el.addObstacleBtn.addEventListener("click", addObstacle);
+        el.defaultBtn.addEventListener("click", () => setObstaclesFromDefs(defaultObstacleDefs));
+        el.narrowBtn.addEventListener("click", () => {
+          state.start = { x: 260, y: 700 };
+          state.goal = { x: 2240, y: 4300 };
+          syncPointInputs();
+          setObstaclesFromDefs(narrowObstacleDefs);
+        });
+        el.clearBtn.addEventListener("click", () => {
+          state.obstacles = [];
+          planAll();
+        });
+
+        el.obstacleList.addEventListener("click", (event) => {
+          const button = event.target.closest("button[data-id]");
+
+          if (!button) {
+            return;
+          }
+
+          const id = Number(button.dataset.id);
+          state.obstacles = state.obstacles.filter((obstacle) => obstacle.id !== id);
+          planAll();
+        });
+
+        window.addEventListener("resize", requestDrawAll);
+      }
+
+      function init() {
+        syncPointInputs();
+        attachEvents();
+        setObstaclesFromDefs(defaultObstacleDefs);
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

@@ -126,11 +126,13 @@ app_status_t app_init(void)
         APP_LOGE("assembly init fail");
         return APP_ERR;
     }
+    APP_LOGI("assembly init success");
     /* 2) 起底盘服务（接入 chassis + map + 20ms 控制任务） */
     if (csvc_init() != CSVC_OK) {
         APP_LOGE("chassis service init fail");
         return APP_ERR;
     }
+    APP_LOGI("chassis service init success");
     /* 3) 里程计对齐世界系初始位姿 */
     start.x_mm = (int16_t)APP_START_X_MM;
     start.y_mm = (int16_t)APP_START_Y_MM;
@@ -141,10 +143,12 @@ app_status_t app_init(void)
         APP_LOGE("ble queue fail");
         return APP_ERR;
     }
+    APP_LOGI("ble queue init success");
     if (ble_adp_init(app_on_rx_raw, app_on_nav) != BLE_OK) {
         APP_LOGE("ble adp init fail");
         return APP_ERR;
     }
+    APP_LOGI("ble adp init success");
     /* 5) 起 BLE 调度任务 */
     g_task = osThreadNew(app_task, NULL, &g_task_attr);
     if (g_task == NULL) {

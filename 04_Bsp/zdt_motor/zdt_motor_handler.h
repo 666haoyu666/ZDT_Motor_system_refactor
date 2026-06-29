@@ -51,6 +51,12 @@ typedef struct {
     void (*pf_exit)(void);
 } mh_os_lock_t;
 
+/* ---- 上层事件钩子（RX 解析结果上抛） ---- */
+
+/* 每解析出一帧回调上抛：RX 线程上下文，勿阻塞 / 勿持锁久 */
+typedef void (*mh_evt_cb_t)(void *ctx, uint8_t idx,
+                            const zdt_rx_t *rx);
+
 /* 电机 handler 对象（一个实例 = 一条总线） */
 typedef struct {
     uint8_t      is_inited;       /* 是否已实例化 */
@@ -66,6 +72,8 @@ typedef struct {
     const mh_os_queue_t  *os_queue;  /* 注入：队列 */
     const mh_os_time_t   *os_time;   /* 注入：时间 */
     const mh_os_lock_t   *os_lock;   /* 注入：临界区 */
+    mh_evt_cb_t           pf_on_evt; /* 注入：RX 事件钩子，可空 */
+    void                 *evt_ctx;   /* 注入：钩子上下文 */
 } motor_handler_t;
 
 /**
@@ -85,6 +93,17 @@ zdt_status_t mh_inst(motor_handler_t *h, zdt_group_t *bus,
                      const mh_os_time_t *time,
                      const mh_os_lock_t *lock,
                      uint16_t gap_ms);
+
+/**
+ * @brief  注册 RX 事件钩子：每解析出一帧经它上抛上层
+ * @param  h   handler 对象
+ * @param  pf  钩子函数，可空（空则不回调）
+ * @param  ctx 钩子上下文，回调时原样带回
+ * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT
+ * @note   建议在 mh_start 前注册；回调在 RX 线程上下文，勿阻塞
+ */
+zdt_status_t mh_on_event(motor_handler_t *h, mh_evt_cb_t pf,
+                         void *ctx);
 
 /**
  * @brief  启动：建 TX/RX 两个队列与两个工作线程

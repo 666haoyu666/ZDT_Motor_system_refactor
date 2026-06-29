@@ -79,6 +79,20 @@ static zdt_motor_t *motor_at(const motor_handler_t *h, uint8_t idx)
     return h->bus->motors[idx];
 }
 
+/** @brief 反查电机在总线的槽位，未命中返回 ZDT_GROUP_MAX */
+static uint8_t motor_index(const motor_handler_t *h,
+                           const zdt_motor_t *m)
+{
+    uint8_t i = 0U; /* 槽位下标 */
+
+    for (i = 0U; i < ZDT_GROUP_MAX; i++) {
+        if (h->bus->motors[i] == m) {
+            return i;
+        }
+    }
+    return ZDT_GROUP_MAX;
+}
+
 /** @brief 距上次发送补足 gap_ms（tick 无符号减法兼容回绕） */
 static void tx_gate(motor_handler_t *h)
 {
@@ -174,6 +188,7 @@ static void rx_thread_body(void *arg)
     motor_handler_t *h = (motor_handler_t *)arg; /* handler 对象 */
     mh_rx_evt_t evt;                             /* 取出的帧事件 */
     zdt_rx_t rx;                                 /* 解析结果 */
+    uint8_t idx = 0U;                            /* 来源电机槽位 */
 
     for (;;) {
         // 0.阻塞等待一条接收帧事件
@@ -181,13 +196,16 @@ static void rx_thread_body(void *arg)
                                   MH_WAIT_FOREVER) != ZDT_OK) {
             continue;
         }
-        // 1.持锁解析并更新位置
+        // 1.持锁解析并更新位置（锁只护 pos_pulse）
         h->os_lock->pf_enter();
         (void)zdt_motor_parse(evt.motor, evt.data, evt.len, &rx);
         h->os_lock->pf_exit();
-        /* rx.kind 为到位/回零完成/错误时，留待 app 事件钩子消费
-         * （本版仅更新位置）
-         */
+        // 2.反查槽位，出锁后上抛事件（避免上层回调重入锁死锁）
+        idx = motor_index(h, evt.motor);
+        if ((h->pf_on_evt != NULL) && (rx.kind != ZDT_RX_NONE) &&
+            (idx < ZDT_GROUP_MAX)) {
+            h->pf_on_evt(h->evt_ctx, idx, &rx);
+        }
     }
 }
 
@@ -226,6 +244,32 @@ zdt_status_t mh_inst(motor_handler_t *h, zdt_group_t *bus,
     h->os_queue     = queue;
     h->os_time      = time;
     h->os_lock      = lock;
+    h->pf_on_evt    = NULL;
+    h->evt_ctx      = NULL;
+    return ZDT_OK;
+}
+
+/**
+ * @brief  注册 RX 事件钩子：每解析出一帧经它上抛上层
+ * @param  h   handler 对象
+ * @param  pf  钩子函数，可空（空则不回调）
+ * @param  ctx 钩子上下文，回调时原样带回
+ * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT
+ * @note   建议在 mh_start 前注册；回调在 RX 线程上下文，勿阻塞
+ */
+zdt_status_t mh_on_event(motor_handler_t *h, mh_evt_cb_t pf,
+                         void *ctx)
+{
+    // 0.参数合法性检查：handler 指针与实例化状态
+    if (h == NULL) {
+        return ZDT_ERR_PARAM;
+    }
+    if (h->is_inited == 0U) {
+        return ZDT_ERR_INIT;
+    }
+    // 1.记录钩子与上下文（pf 可空，表示关闭上抛）
+    h->pf_on_evt = pf;
+    h->evt_ctx   = ctx;
     return ZDT_OK;
 }
 

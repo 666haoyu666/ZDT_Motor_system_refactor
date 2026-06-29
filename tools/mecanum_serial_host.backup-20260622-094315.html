@@ -1,0 +1,1509 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>麦轮串口导航上位机</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f6f4;
+      --ink: #16201b;
+      --muted: #5d6963;
+      --line: #ccd7d0;
+      --surface: #ffffff;
+      --surface-soft: #eef3f0;
+      --green: #0f7a52;
+      --green-soft: #dcefe6;
+      --red: #c83532;
+      --blue: #286fa9;
+      --yellow: #c58a18;
+      --field: #e7eee9;
+      --shadow: 0 10px 28px rgba(18, 33, 26, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    main {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .topbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 24px;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .badge {
+      display: inline-flex;
+      min-height: 32px;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .badge.ok {
+      border-color: #a8d4bd;
+      background: var(--green-soft);
+      color: #0d5e42;
+    }
+
+    .badge.warn {
+      border-color: #e6c684;
+      background: #fff6dc;
+      color: #76500c;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 372px minmax(0, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .control-panel,
+    .map-panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .control-panel {
+      padding: 14px;
+      overflow: hidden;
+    }
+
+    .map-panel {
+      display: flex;
+      min-height: 760px;
+      flex-direction: column;
+      padding: 12px;
+    }
+
+    .section {
+      padding: 0 0 14px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .field-row.single {
+      grid-template-columns: 1fr;
+    }
+
+    label {
+      display: block;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    input,
+    select {
+      display: block;
+      width: 100%;
+      min-height: 38px;
+      margin-top: 5px;
+      padding: 8px 9px;
+      border: 1px solid #b8c5bd;
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--ink);
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(15, 122, 82, 0.14);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin-top: 10px;
+    }
+
+    .button-row.three {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    button {
+      min-height: 38px;
+      padding: 8px 10px;
+      border: 1px solid #aebbb4;
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    button.primary {
+      border-color: var(--green);
+      background: var(--green);
+      color: #ffffff;
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: #0c6846;
+      color: #ffffff;
+    }
+
+    button.danger {
+      border-color: #dfa6a4;
+      color: var(--red);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status-line {
+      min-height: 34px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .frame-box {
+      min-height: 50px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #111a16;
+      color: #d9f3e8;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-soft);
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 16px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .log {
+      height: 160px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #101715;
+      color: #d5eee3;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    .map-toolbar {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .map-toolbar .metric {
+      background: #f8faf9;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 560px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f9fbfa;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 560px;
+      cursor: crosshair;
+    }
+
+    .legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 20px;
+    }
+
+    .legend i {
+      display: inline-block;
+      width: 18px;
+      height: 10px;
+      border-radius: 3px;
+      background: var(--green);
+    }
+
+    .legend .robot i {
+      background: var(--green);
+    }
+
+    .legend .target i {
+      background: var(--yellow);
+    }
+
+    .legend .track i {
+      height: 3px;
+      background: var(--blue);
+    }
+
+    .legend .path i {
+      height: 3px;
+      background: #16835f;
+    }
+
+    .legend .obstacle i {
+      background: #111111;
+    }
+
+    .legend .start i {
+      background: var(--red);
+    }
+
+    @media (max-width: 1060px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .map-panel {
+        min-height: 660px;
+      }
+    }
+
+    @media (max-width: 620px) {
+      main {
+        padding: 10px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .field-row,
+      .button-row,
+      .button-row.three,
+      .map-toolbar,
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .map-panel {
+        min-height: 560px;
+      }
+
+      .canvas-wrap,
+      canvas {
+        min-height: 430px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="topbar">
+      <h1>麦轮串口导航上位机</h1>
+      <div id="serialSupport" class="badge">检测串口能力</div>
+    </header>
+
+    <div class="workspace">
+      <aside class="control-panel">
+        <section class="section">
+          <h2>串口连接</h2>
+          <div class="field-row">
+            <label>
+              波特率
+              <select id="baudSelect">
+                <option value="9600">9600</option>
+                <option value="19200">19200</option>
+                <option value="38400">38400</option>
+                <option value="57600">57600</option>
+                <option value="115200" selected>115200</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+            <label>
+              自定义
+              <input id="baudCustom" type="number" min="1" step="1" value="115200" disabled>
+            </label>
+          </div>
+          <div class="button-row three">
+            <button id="selectPortBtn">选择端口</button>
+            <button id="connectBtn" class="primary">连接</button>
+            <button id="disconnectBtn" class="danger" disabled>断开</button>
+          </div>
+          <div class="button-row">
+            <button id="changePortBtn">重新选择端口</button>
+            <button id="reconnectBtn">应用波特率</button>
+          </div>
+          <div id="connectStatus" class="status-line">未连接</div>
+        </section>
+
+        <section class="section">
+          <h2>导航目标</h2>
+          <div class="field-row single">
+            <label>
+              导航模式
+              <select id="navigationMode">
+                <option value="1" selected>直线导航 0x01</option>
+                <option value="2">路径规划导航 0x02</option>
+              </select>
+            </label>
+          </div>
+          <div class="field-row">
+            <label>
+              目标 X mm（相对起点）
+              <input id="targetX" type="number" min="-32768" max="32767" step="1" value="1000">
+            </label>
+            <label>
+              目标 Y mm（相对起点）
+              <input id="targetY" type="number" min="-32768" max="32767" step="1" value="2000">
+            </label>
+          </div>
+          <div class="field-row">
+            <label>
+              目标 yaw deg
+              <input id="targetYaw" type="number" min="-255" max="255" step="1" value="0">
+            </label>
+            <label>
+              最大线速度 mm/s
+              <input id="maxLinear" type="number" min="0" max="65535" step="1" value="500">
+            </label>
+          </div>
+          <div class="field-row single">
+            <label>
+              最大角速度 deg/s
+              <input id="maxAngular" type="number" min="0" max="255" step="1" value="60">
+            </label>
+          </div>
+          <div id="frameHex" class="frame-box"></div>
+          <div class="button-row">
+            <button id="sendBtn" class="primary" disabled>发送导航点</button>
+            <button id="copyFrameBtn">复制帧</button>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>实时数据</h2>
+          <div class="metrics">
+            <div class="metric"><span>X mm</span><strong id="poseX">0</strong></div>
+            <div class="metric"><span>Y mm</span><strong id="poseY">0</strong></div>
+            <div class="metric"><span>yaw</span><strong id="poseYaw">0</strong></div>
+            <div class="metric"><span>vx</span><strong id="poseVx">0</strong></div>
+            <div class="metric"><span>vy</span><strong id="poseVy">0</strong></div>
+            <div class="metric"><span>w</span><strong id="poseW">0</strong></div>
+          </div>
+          <div class="button-row">
+            <button id="resetPoseBtn">清零显示</button>
+            <button id="clearTrackBtn">清除轨迹</button>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>接收日志</h2>
+          <div id="rxLog" class="log"></div>
+        </section>
+      </aside>
+
+      <section class="map-panel">
+        <div class="map-toolbar">
+          <div class="metric"><span>坐标系</span><strong>+X 上 / +Y 左</strong></div>
+          <div class="metric"><span>起点</span><strong>(1200, 350)</strong></div>
+          <div class="metric"><span>场地</span><strong>2500 x 5000</strong></div>
+          <div class="metric"><span>轨迹点</span><strong id="trackCount">1</strong></div>
+          <div class="metric"><span>路径点</span><strong id="pathCount">0</strong></div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="fieldCanvas"></canvas>
+        </div>
+        <div class="legend">
+          <span class="robot"><i></i>小车</span>
+          <span class="target"><i></i>目标</span>
+          <span class="track"><i></i>轨迹</span>
+          <span class="path"><i></i>上报路径</span>
+          <span class="obstacle"><i></i>障碍</span>
+          <span class="start"><i></i>出发区</span>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    "use strict";
+
+    const MAP_X_MAX_MM = 2500;
+    const MAP_Y_MAX_MM = 5000;
+    const MAP_RESOLUTION_MM = 50;
+    const GRID_X_COUNT = Math.floor(MAP_X_MAX_MM / MAP_RESOLUTION_MM) + 1;
+    const GRID_Y_COUNT = Math.floor(MAP_Y_MAX_MM / MAP_RESOLUTION_MM) + 1;
+    const GRID_X_MAX = GRID_X_COUNT - 1;
+    const GRID_Y_MAX = GRID_Y_COUNT - 1;
+    const START_SQUARE_MM = 440;
+    const START_MAP_X_MM = 1200;
+    const START_MAP_Y_MM = 350;
+    const MAX_TRACK_POINTS = 900;
+    const FRAME_HEAD = 0x55;
+    const FRAME_CMD_LINE_NAV = 0x01;
+    const FRAME_CMD_PATH_NAV = 0x02;
+    const FRAME_TAIL = 0x6B;
+    const DEFAULT_OBSTACLES = [
+      { type: "circle", name: "中央圆", x: 1200, y: 2500, r: 200 },
+      { type: "rect", name: "左仓库", x1: 0, y1: 2100, x2: 200, y2: 2900 },
+      { type: "circle", name: "左圆台", x: 0, y: 4300, r: 200 },
+      { type: "circle", name: "上圆柱", x: 1200, y: 4300, r: 100 },
+      { type: "rect", name: "右仓库", x1: 2300, y1: 2100, x2: 2500, y2: 2900 }
+    ];
+
+    const el = {
+      serialSupport: document.getElementById("serialSupport"),
+      baudSelect: document.getElementById("baudSelect"),
+      baudCustom: document.getElementById("baudCustom"),
+      selectPortBtn: document.getElementById("selectPortBtn"),
+      connectBtn: document.getElementById("connectBtn"),
+      disconnectBtn: document.getElementById("disconnectBtn"),
+      changePortBtn: document.getElementById("changePortBtn"),
+      reconnectBtn: document.getElementById("reconnectBtn"),
+      connectStatus: document.getElementById("connectStatus"),
+      navigationMode: document.getElementById("navigationMode"),
+      targetX: document.getElementById("targetX"),
+      targetY: document.getElementById("targetY"),
+      targetYaw: document.getElementById("targetYaw"),
+      maxLinear: document.getElementById("maxLinear"),
+      maxAngular: document.getElementById("maxAngular"),
+      frameHex: document.getElementById("frameHex"),
+      sendBtn: document.getElementById("sendBtn"),
+      copyFrameBtn: document.getElementById("copyFrameBtn"),
+      poseX: document.getElementById("poseX"),
+      poseY: document.getElementById("poseY"),
+      poseYaw: document.getElementById("poseYaw"),
+      poseVx: document.getElementById("poseVx"),
+      poseVy: document.getElementById("poseVy"),
+      poseW: document.getElementById("poseW"),
+      resetPoseBtn: document.getElementById("resetPoseBtn"),
+      clearTrackBtn: document.getElementById("clearTrackBtn"),
+      rxLog: document.getElementById("rxLog"),
+      fieldCanvas: document.getElementById("fieldCanvas"),
+      trackCount: document.getElementById("trackCount"),
+      pathCount: document.getElementById("pathCount")
+    };
+
+    const ctx = el.fieldCanvas.getContext("2d");
+    const state = {
+      port: null,
+      reader: null,
+      writer: null,
+      readPromise: null,
+      readAbort: false,
+      rxBuffer: "",
+      connected: false,
+      lastFrame: [],
+      pose: {
+        x: 0,
+        y: 0,
+        yaw: 0,
+        vx: 0,
+        vy: 0,
+        w: 0
+      },
+      track: [{ x: 0, y: 0 }],
+      reportedPath: [],
+      reportedPathKeys: new Set(),
+      obstacleMap: buildObstacleMap(),
+      logLines: []
+    };
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function gridToMm(gridValue) {
+      return gridValue * MAP_RESOLUTION_MM;
+    }
+
+    function pointInsideObstacle(xMm, yMm, obstacle) {
+      if (obstacle.type === "rect") {
+        return xMm >= obstacle.x1 &&
+          xMm <= obstacle.x2 &&
+          yMm >= obstacle.y1 &&
+          yMm <= obstacle.y2;
+      }
+
+      const dx = xMm - obstacle.x;
+      const dy = yMm - obstacle.y;
+      return ((dx * dx) + (dy * dy)) <= (obstacle.r * obstacle.r);
+    }
+
+    function obstacleCellIndex(gridX, gridY) {
+      return (gridY * GRID_X_COUNT) + gridX;
+    }
+
+    function buildObstacleMap() {
+      const map = new Uint8Array(GRID_X_COUNT * GRID_Y_COUNT);
+
+      for (let gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+        for (let gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+          const xMm = gridToMm(gridX);
+          const yMm = gridToMm(gridY);
+          const blocked = DEFAULT_OBSTACLES.some((obstacle) =>
+            pointInsideObstacle(xMm, yMm, obstacle)
+          );
+
+          if (blocked) {
+            map[obstacleCellIndex(gridX, gridY)] = 1;
+          }
+        }
+      }
+
+      return map;
+    }
+
+    function readInteger(input, name, min, max) {
+      const value = Number(input.value);
+      if (!Number.isFinite(value) || !Number.isInteger(value)) {
+        throw new Error(`${name} 必须是整数`);
+      }
+
+      if ((value < min) || (value > max)) {
+        throw new Error(`${name} 范围 ${min}..${max}`);
+      }
+
+      return value;
+    }
+
+    function int16ToBytes(value) {
+      const word = value < 0 ? value + 0x10000 : value;
+      return [(word >> 8) & 0xFF, word & 0xFF];
+    }
+
+    function uint16ToBytes(value) {
+      return [(value >> 8) & 0xFF, value & 0xFF];
+    }
+
+    function hexByte(value) {
+      return value.toString(16).toUpperCase().padStart(2, "0");
+    }
+
+    function bytesToHex(bytes) {
+      return bytes.map(hexByte).join(" ");
+    }
+
+    function readNavigationMode() {
+      const mode = Number(el.navigationMode.value);
+      if (mode === FRAME_CMD_LINE_NAV) {
+        return FRAME_CMD_LINE_NAV;
+      }
+
+      if (mode === FRAME_CMD_PATH_NAV) {
+        return FRAME_CMD_PATH_NAV;
+      }
+
+      throw new Error("导航模式无效");
+    }
+
+    function buildNavigationFrame() {
+      const navMode = readNavigationMode();
+      const x = readInteger(el.targetX, "终止点 X", -32768, 32767);
+      const y = readInteger(el.targetY, "终止点 Y", -32768, 32767);
+      const yaw = readInteger(el.targetYaw, "目标 yaw", -255, 255);
+      const maxLinear = readInteger(el.maxLinear, "最大线速度", 0, 65535);
+      const maxAngular = readInteger(el.maxAngular, "最大角速度", 0, 255);
+      const [xHigh, xLow] = int16ToBytes(x);
+      const [yHigh, yLow] = int16ToBytes(y);
+      const yawSign = yaw < 0 ? 0x00 : 0x01;
+      const yawAbs = Math.abs(yaw);
+      const [vHigh, vLow] = uint16ToBytes(maxLinear);
+
+      return [
+        FRAME_HEAD,
+        navMode,
+        xHigh,
+        xLow,
+        yHigh,
+        yLow,
+        yawSign,
+        yawAbs,
+        vHigh,
+        vLow,
+        maxAngular,
+        FRAME_TAIL
+      ];
+    }
+
+    function updateFramePreview() {
+      try {
+        state.lastFrame = buildNavigationFrame();
+        el.frameHex.textContent = bytesToHex(state.lastFrame);
+      } catch (error) {
+        state.lastFrame = [];
+        el.frameHex.textContent = error.message;
+      }
+
+      drawField();
+    }
+
+    function getBaudRate() {
+      if (el.baudSelect.value === "custom") {
+        return readInteger(el.baudCustom, "自定义波特率", 1, 4000000);
+      }
+
+      return Number(el.baudSelect.value);
+    }
+
+    function setStatus(message, type) {
+      el.connectStatus.textContent = message;
+      el.connectStatus.style.color = type === "error" ? "var(--red)" : "var(--muted)";
+    }
+
+    function appendLog(line) {
+      const now = new Date();
+      const stamp = now.toLocaleTimeString("zh-CN", { hour12: false });
+      state.logLines.push(`[${stamp}] ${line}`);
+      if (state.logLines.length > 140) {
+        state.logLines.splice(0, state.logLines.length - 140);
+      }
+
+      el.rxLog.textContent = state.logLines.join("\n");
+      el.rxLog.scrollTop = el.rxLog.scrollHeight;
+    }
+
+    function setConnected(connected) {
+      state.connected = connected;
+      el.connectBtn.disabled = connected;
+      el.disconnectBtn.disabled = !connected;
+      el.sendBtn.disabled = !connected;
+      el.selectPortBtn.disabled = connected;
+      el.changePortBtn.disabled = false;
+      el.reconnectBtn.disabled = false;
+    }
+
+    async function selectPort() {
+      if (!("serial" in navigator)) {
+        setStatus("当前浏览器不支持 Web Serial", "error");
+        return;
+      }
+
+      try {
+        state.port = await navigator.serial.requestPort();
+        setStatus("已选择端口");
+      } catch (error) {
+        if (error.name !== "NotFoundError") {
+          setStatus(`选择端口失败：${error.message}`, "error");
+        }
+      }
+    }
+
+    async function connectPort() {
+      if (!("serial" in navigator)) {
+        setStatus("当前浏览器不支持 Web Serial", "error");
+        return;
+      }
+
+      try {
+        if (state.connected) {
+          await disconnectPort();
+        }
+
+        if (!state.port) {
+          state.port = await navigator.serial.requestPort();
+        }
+
+        const baudRate = getBaudRate();
+        await state.port.open({
+          baudRate,
+          dataBits: 8,
+          stopBits: 1,
+          parity: "none",
+          flowControl: "none"
+        });
+
+        state.writer = state.port.writable.getWriter();
+        state.readAbort = false;
+        setConnected(true);
+        setStatus(`已连接，${baudRate} baud`);
+        appendLog(`open ${baudRate} baud`);
+        state.readPromise = readSerialLoop();
+      } catch (error) {
+        setConnected(false);
+        setStatus(`连接失败：${error.message}`, "error");
+      }
+    }
+
+    async function disconnectPort() {
+      state.readAbort = true;
+
+      try {
+        if (state.reader) {
+          await state.reader.cancel();
+        }
+      } catch (error) {
+        appendLog(`reader cancel: ${error.message}`);
+      }
+
+      if (state.readPromise) {
+        try {
+          await state.readPromise;
+        } catch (error) {
+          appendLog(`read loop: ${error.message}`);
+        }
+        state.readPromise = null;
+      }
+
+      if (state.writer) {
+        try {
+          state.writer.releaseLock();
+        } catch (error) {
+          appendLog(`writer release: ${error.message}`);
+        }
+        state.writer = null;
+      }
+
+      if (state.port) {
+        try {
+          await state.port.close();
+          appendLog("close");
+        } catch (error) {
+          appendLog(`close: ${error.message}`);
+        }
+      }
+
+      setConnected(false);
+      setStatus("已断开");
+    }
+
+    async function reconnectWithBaud() {
+      if (!state.port) {
+        await selectPort();
+        if (!state.port) {
+          return;
+        }
+      }
+
+      await disconnectPort();
+      await connectPort();
+    }
+
+    async function readSerialLoop() {
+      const decoder = new TextDecoder();
+
+      while (state.port && state.port.readable && !state.readAbort) {
+        state.reader = state.port.readable.getReader();
+        try {
+          while (!state.readAbort) {
+            const result = await state.reader.read();
+            if (result.done) {
+              break;
+            }
+            if (result.value) {
+              handleIncomingText(decoder.decode(result.value, { stream: true }));
+            }
+          }
+        } catch (error) {
+          if (!state.readAbort) {
+            appendLog(`read error: ${error.message}`);
+          }
+        } finally {
+          if (state.reader) {
+            state.reader.releaseLock();
+            state.reader = null;
+          }
+        }
+      }
+    }
+
+    function handleIncomingText(chunk) {
+      state.rxBuffer += chunk;
+      state.rxBuffer = state.rxBuffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+      let lineBreak = state.rxBuffer.indexOf("\n");
+      while (lineBreak >= 0) {
+        const line = state.rxBuffer.slice(0, lineBreak);
+        state.rxBuffer = state.rxBuffer.slice(lineBreak + 1);
+        handleIncomingLine(line);
+        lineBreak = state.rxBuffer.indexOf("\n");
+      }
+
+      if (state.rxBuffer.length > 512) {
+        appendLog(state.rxBuffer);
+        state.rxBuffer = "";
+      }
+    }
+
+    function handleIncomingLine(line) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      const poseMatch = trimmed.match(/^(-?\d+),(-?\d+),(-?\d+),(-?\d+),(-?\d+),(-?\d+)$/);
+      if (poseMatch) {
+        handlePoseReport(poseMatch.slice(1).map(Number));
+        return;
+      }
+
+      const mapMatch = trimmed.match(/^(-?\d+),(-?\d+),(-?\d+)$/);
+      if (mapMatch) {
+        handleMapPointReport(mapMatch.slice(1).map(Number));
+        return;
+      }
+
+      if (!poseMatch) {
+        appendLog(trimmed);
+        return;
+      }
+    }
+
+    function handlePoseReport(values) {
+      state.pose = {
+        x: values[0],
+        y: values[1],
+        yaw: values[2],
+        vx: values[3],
+        vy: values[4],
+        w: values[5]
+      };
+
+      pushTrackPoint(state.pose.x, state.pose.y);
+      renderPose();
+      drawField();
+    }
+
+    function mapPointKey(x, y) {
+      return `${x},${y}`;
+    }
+
+    function handleMapPointReport(values) {
+      const x = values[0];
+      const y = values[1];
+      const type = values[2];
+      const key = mapPointKey(x, y);
+
+      if (type === 2) {
+        if (!state.reportedPathKeys.has(key)) {
+          state.reportedPath.push({ x, y });
+          state.reportedPathKeys.add(key);
+        }
+      } else if (type === 0) {
+        if (state.reportedPathKeys.delete(key)) {
+          state.reportedPath = state.reportedPath.filter((point) =>
+            mapPointKey(point.x, point.y) !== key
+          );
+        }
+      } else {
+        appendLog(`${x},${y},${type}`);
+        return;
+      }
+
+      el.pathCount.textContent = String(state.reportedPath.length);
+      drawField();
+    }
+
+    function pushTrackPoint(x, y) {
+      const last = state.track[state.track.length - 1];
+      if (!last || last.x !== x || last.y !== y) {
+        state.track.push({ x, y });
+      }
+
+      if (state.track.length > MAX_TRACK_POINTS) {
+        state.track.splice(0, state.track.length - MAX_TRACK_POINTS);
+      }
+
+      el.trackCount.textContent = String(state.track.length);
+    }
+
+    async function sendNavigationFrame() {
+      if (!state.connected || !state.writer) {
+        setStatus("串口未连接", "error");
+        return;
+      }
+
+      try {
+        const frame = buildNavigationFrame();
+        await state.writer.write(new Uint8Array(frame));
+        state.lastFrame = frame;
+        el.frameHex.textContent = bytesToHex(frame);
+        appendLog(`tx ${bytesToHex(frame)}`);
+      } catch (error) {
+        setStatus(`发送失败：${error.message}`, "error");
+      }
+    }
+
+    async function copyFrame() {
+      try {
+        const frame = buildNavigationFrame();
+        await navigator.clipboard.writeText(bytesToHex(frame));
+        appendLog(`copy ${bytesToHex(frame)}`);
+      } catch (error) {
+        appendLog(`copy failed: ${error.message}`);
+      }
+    }
+
+    function renderPose() {
+      el.poseX.textContent = String(state.pose.x);
+      el.poseY.textContent = String(state.pose.y);
+      el.poseYaw.textContent = String(state.pose.yaw);
+      el.poseVx.textContent = String(state.pose.vx);
+      el.poseVy.textContent = String(state.pose.vy);
+      el.poseW.textContent = String(state.pose.w);
+    }
+
+    function resetPoseDisplay() {
+      state.pose = { x: 0, y: 0, yaw: 0, vx: 0, vy: 0, w: 0 };
+      state.track = [{ x: 0, y: 0 }];
+      renderPose();
+      el.trackCount.textContent = "1";
+      drawField();
+    }
+
+    function clearTrack() {
+      state.track = [{ x: state.pose.x, y: state.pose.y }];
+      el.trackCount.textContent = "1";
+      drawField();
+    }
+
+    function resizeCanvas() {
+      const rect = el.fieldCanvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const width = Math.max(320, Math.round(rect.width));
+      const height = Math.max(320, Math.round(rect.height));
+      el.fieldCanvas.width = Math.round(width * ratio);
+      el.fieldCanvas.height = Math.round(height * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      return { width, height };
+    }
+
+    function getPlotBox(width, height) {
+      const padLeft = width < 520 ? 44 : 54;
+      const padRight = width < 520 ? 14 : 18;
+      const padTop = 20;
+      const padBottom = width < 520 ? 36 : 44;
+      const availableW = width - padLeft - padRight;
+      const availableH = height - padTop - padBottom;
+      const mapAspect = MAP_Y_MAX_MM / MAP_X_MAX_MM;
+      let plotW = availableW;
+      let plotH = plotW / mapAspect;
+
+      if (plotH > availableH) {
+        plotH = availableH;
+        plotW = plotH * mapAspect;
+      }
+
+      return {
+        left: padLeft + ((availableW - plotW) * 0.5),
+        top: padTop + ((availableH - plotH) * 0.5),
+        width: plotW,
+        height: plotH,
+        scaleX: plotH / MAP_X_MAX_MM,
+        scaleY: plotW / MAP_Y_MAX_MM
+      };
+    }
+
+    function fieldToCanvas(x, y, plot) {
+      return {
+        x: plot.left + plot.width - ((y / MAP_Y_MAX_MM) * plot.width),
+        y: plot.top + plot.height - ((x / MAP_X_MAX_MM) * plot.height)
+      };
+    }
+
+    function canvasToField(x, y, plot) {
+      return {
+        x: clamp(((plot.top + plot.height - y) / plot.height) * MAP_X_MAX_MM, 0, MAP_X_MAX_MM),
+        y: clamp(((plot.left + plot.width - x) / plot.width) * MAP_Y_MAX_MM, 0, MAP_Y_MAX_MM)
+      };
+    }
+
+    function odomToField(x, y) {
+      // 固件上报的是地图绝对坐标，网页不再叠加出发点偏移。
+      return {
+        x,
+        y
+      };
+    }
+
+    function fieldToOdom(x, y) {
+      return {
+        x,
+        y
+      };
+    }
+
+    function drawField() {
+      const { width, height } = resizeCanvas();
+      const plot = getPlotBox(width, height);
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#f9fbfa";
+      ctx.fillRect(0, 0, width, height);
+
+      drawCompetitionField(plot);
+      drawReportedPath(plot);
+      drawTrack(plot);
+      drawTarget(plot);
+      drawRobot(plot);
+    }
+
+    function drawCompetitionField(plot) {
+      const origin = fieldToCanvas(START_MAP_X_MM, START_MAP_Y_MM, plot);
+
+      drawGrid(plot);
+      drawObstacles(plot);
+      drawStartSquare(plot);
+
+      ctx.fillStyle = "#20342b";
+      ctx.font = "13px Arial";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("+X", origin.x + 8, Math.max(plot.top + 18, origin.y - 58));
+      ctx.fillText("+Y", Math.max(plot.left + 8, origin.x - 58), origin.y - 8);
+      ctx.fillText("1200,350", origin.x + 8, origin.y + 18);
+    }
+
+    function drawGrid(plot) {
+      const axisStep = 500;
+
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#cfd8d0";
+      ctx.lineWidth = 1;
+      ctx.fillRect(plot.left, plot.top, plot.width, plot.height);
+      ctx.strokeRect(plot.left, plot.top, plot.width, plot.height);
+
+      ctx.strokeStyle = "#e1e7df";
+      ctx.fillStyle = "#6a756d";
+      ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      for (let yMm = 0; yMm <= MAP_Y_MAX_MM; yMm += axisStep) {
+        const p0 = fieldToCanvas(0, yMm, plot);
+
+        ctx.beginPath();
+        ctx.moveTo(p0.x, plot.top);
+        ctx.lineTo(p0.x, plot.top + plot.height);
+        ctx.stroke();
+        ctx.fillText(String(yMm), p0.x, plot.top + plot.height + 8);
+      }
+
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      for (let xMm = 0; xMm <= MAP_X_MAX_MM; xMm += axisStep) {
+        const p0 = fieldToCanvas(xMm, 0, plot);
+
+        ctx.beginPath();
+        ctx.moveTo(plot.left, p0.y);
+        ctx.lineTo(plot.left + plot.width, p0.y);
+        ctx.stroke();
+        ctx.fillText(String(xMm), plot.left - 8, p0.y);
+      }
+    }
+
+    function drawStartSquare(plot) {
+      const x = START_MAP_X_MM - (START_SQUARE_MM * 0.5);
+      const y = START_MAP_Y_MM - (START_SQUARE_MM * 0.5);
+
+      drawRectMm(
+        plot,
+        x,
+        y,
+        START_SQUARE_MM,
+        START_SQUARE_MM,
+        "#ed1010",
+        "#a81111",
+        1
+      );
+    }
+
+    function drawRectMm(plot, x, y, w, h, fill, stroke, lineWidth) {
+      const p1 = fieldToCanvas(x, y, plot);
+      const p2 = fieldToCanvas(x + h, y + w, plot);
+      const left = Math.min(p1.x, p2.x);
+      const top = Math.min(p1.y, p2.y);
+      const width = Math.abs(p2.x - p1.x);
+      const height = Math.abs(p2.y - p1.y);
+
+      ctx.fillStyle = fill;
+      ctx.fillRect(left, top, width, height);
+      if (lineWidth > 0) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = lineWidth;
+        ctx.strokeRect(left, top, width, height);
+      }
+    }
+
+    function cellRect(gridX, gridY, plot) {
+      const cellW = plot.width / GRID_Y_MAX;
+      const cellH = plot.height / GRID_X_MAX;
+      const center = fieldToCanvas(gridToMm(gridX), gridToMm(gridY), plot);
+
+      return {
+        x: center.x - (cellW * 0.5),
+        y: center.y - (cellH * 0.5),
+        w: Math.max(1, cellW + 0.35),
+        h: Math.max(1, cellH + 0.35)
+      };
+    }
+
+    function drawObstacles(plot) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(plot.left, plot.top, plot.width, plot.height);
+      ctx.clip();
+
+      ctx.fillStyle = "#111111";
+      for (let gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+        for (let gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+          if (state.obstacleMap[obstacleCellIndex(gridX, gridY)] === 0) {
+            continue;
+          }
+
+          const rect = cellRect(gridX, gridY, plot);
+          ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        }
+      }
+
+      ctx.strokeStyle = "rgba(255,255,255,0.62)";
+      ctx.lineWidth = 1;
+      DEFAULT_OBSTACLES.forEach((obstacle) => {
+        if (obstacle.type === "rect") {
+          const p1 = fieldToCanvas(obstacle.x1, obstacle.y1, plot);
+          const p2 = fieldToCanvas(obstacle.x2, obstacle.y2, plot);
+          ctx.strokeRect(
+            Math.min(p1.x, p2.x),
+            Math.min(p1.y, p2.y),
+            Math.abs(p2.x - p1.x),
+            Math.abs(p2.y - p1.y)
+          );
+        } else {
+          const center = fieldToCanvas(obstacle.x, obstacle.y, plot);
+          ctx.beginPath();
+          ctx.ellipse(
+            center.x,
+            center.y,
+            obstacle.r * plot.scaleY,
+            obstacle.r * plot.scaleX,
+            0,
+            0,
+            Math.PI * 2
+          );
+          ctx.stroke();
+        }
+      });
+
+      ctx.restore();
+    }
+
+    function drawTrack(plot) {
+      if (state.track.length < 2) {
+        return;
+      }
+
+      ctx.save();
+      ctx.strokeStyle = "#286fa9";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      state.track.forEach((point, index) => {
+        const field = odomToField(point.x, point.y);
+        const canvas = fieldToCanvas(field.x, field.y, plot);
+        if (index === 0) {
+          ctx.moveTo(canvas.x, canvas.y);
+        } else {
+          ctx.lineTo(canvas.x, canvas.y);
+        }
+      });
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawReportedPath(plot) {
+      if (state.reportedPath.length === 0) {
+        return;
+      }
+
+      ctx.save();
+      ctx.strokeStyle = "#16835f";
+      ctx.fillStyle = "#16835f";
+      ctx.lineWidth = 3;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      state.reportedPath.forEach((point, index) => {
+        const canvas = fieldToCanvas(point.x, point.y, plot);
+
+        if (index === 0) {
+          ctx.moveTo(canvas.x, canvas.y);
+        } else {
+          ctx.lineTo(canvas.x, canvas.y);
+        }
+      });
+      ctx.stroke();
+
+      state.reportedPath.forEach((point) => {
+        const canvas = fieldToCanvas(point.x, point.y, plot);
+        ctx.beginPath();
+        ctx.arc(canvas.x, canvas.y, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    function drawTarget(plot) {
+      let frameTarget;
+      try {
+        frameTarget = {
+          x: readInteger(el.targetX, "终止点 X", -32768, 32767),
+          y: readInteger(el.targetY, "终止点 Y", -32768, 32767)
+        };
+      } catch (error) {
+        return;
+      }
+
+      const field = odomToField(frameTarget.x, frameTarget.y);
+      const point = fieldToCanvas(field.x, field.y, plot);
+      const radius = Math.max(8, 48 * Math.min(plot.scaleX, plot.scaleY));
+
+      ctx.save();
+      ctx.strokeStyle = "#c58a18";
+      ctx.fillStyle = "rgba(197, 138, 24, 0.18)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(point.x - radius * 1.5, point.y);
+      ctx.lineTo(point.x + radius * 1.5, point.y);
+      ctx.moveTo(point.x, point.y - radius * 1.5);
+      ctx.lineTo(point.x, point.y + radius * 1.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawRobot(plot) {
+      const field = odomToField(state.pose.x, state.pose.y);
+      const point = fieldToCanvas(field.x, field.y, plot);
+      const scale = Math.min(plot.scaleX, plot.scaleY);
+      const robotSize = Math.max(12, 210 * scale);
+      const headingLength = Math.max(20, 310 * scale);
+      const yawRad = state.pose.yaw * Math.PI / 180;
+      const headingX = point.x + Math.sin(yawRad) * headingLength;
+      const headingY = point.y - Math.cos(yawRad) * headingLength;
+
+      ctx.save();
+      ctx.fillStyle = "#0f7a52";
+      ctx.strokeStyle = "#08432d";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.rect(
+        point.x - robotSize * 0.5,
+        point.y - robotSize * 0.5,
+        robotSize,
+        robotSize
+      );
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.strokeStyle = "#08432d";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(headingX, headingY);
+      ctx.stroke();
+
+      ctx.fillStyle = "#08432d";
+      ctx.beginPath();
+      ctx.arc(headingX, headingY, Math.max(4, 26 * scale), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function handleCanvasClick(event) {
+      const rect = el.fieldCanvas.getBoundingClientRect();
+      const width = Math.max(320, Math.round(rect.width));
+      const height = Math.max(320, Math.round(rect.height));
+      const plot = getPlotBox(width, height);
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+
+      if (
+        x < plot.left ||
+        x > (plot.left + plot.width) ||
+        y < plot.top ||
+        y > (plot.top + plot.height)
+      ) {
+        return;
+      }
+
+      const field = canvasToField(x, y, plot);
+      const odom = fieldToOdom(field.x, field.y);
+      el.targetX.value = String(clamp(Math.round(odom.x), -32768, 32767));
+      el.targetY.value = String(clamp(Math.round(odom.y), -32768, 32767));
+      updateFramePreview();
+    }
+
+    function initSerialSupport() {
+      if ("serial" in navigator) {
+        el.serialSupport.textContent = "Web Serial 可用";
+        el.serialSupport.classList.add("ok");
+      } else {
+        el.serialSupport.textContent = "Web Serial 不可用";
+        el.serialSupport.classList.add("warn");
+        el.selectPortBtn.disabled = true;
+        el.connectBtn.disabled = true;
+        el.changePortBtn.disabled = true;
+        el.reconnectBtn.disabled = true;
+        el.sendBtn.disabled = true;
+      }
+    }
+
+    el.baudSelect.addEventListener("change", () => {
+      el.baudCustom.disabled = el.baudSelect.value !== "custom";
+    });
+    el.selectPortBtn.addEventListener("click", selectPort);
+    el.changePortBtn.addEventListener("click", async () => {
+      const shouldReconnect = state.connected;
+      if (state.connected) {
+        await disconnectPort();
+      }
+      state.port = null;
+      await selectPort();
+      if (shouldReconnect && state.port) {
+        await connectPort();
+      }
+    });
+    el.connectBtn.addEventListener("click", connectPort);
+    el.disconnectBtn.addEventListener("click", disconnectPort);
+    el.reconnectBtn.addEventListener("click", reconnectWithBaud);
+    el.sendBtn.addEventListener("click", sendNavigationFrame);
+    el.copyFrameBtn.addEventListener("click", copyFrame);
+    el.resetPoseBtn.addEventListener("click", resetPoseDisplay);
+    el.clearTrackBtn.addEventListener("click", clearTrack);
+    el.fieldCanvas.addEventListener("click", handleCanvasClick);
+    window.addEventListener("resize", drawField);
+
+    for (const input of [
+      el.navigationMode,
+      el.targetX,
+      el.targetY,
+      el.targetYaw,
+      el.maxLinear,
+      el.maxAngular
+    ]) {
+      input.addEventListener("input", updateFramePreview);
+      input.addEventListener("change", updateFramePreview);
+    }
+
+    initSerialSupport();
+    renderPose();
+    updateFramePreview();
+    drawField();
+  </script>
+</body>
+</html>
