@@ -163,6 +163,14 @@ zdt_status_t mh_home(motor_handler_t *h, uint8_t idx, zdt_home_mode_t mode);
 zdt_status_t mh_report(motor_handler_t *h, uint16_t period_ms);
 
 /**
+ * @brief  投递：广播读取总线全部电机的实时位置（一帧广播读，仅入队）
+ * @param  h handler 对象
+ * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT / ZDT_ERR_RES
+ * @note   回复经各路独立 RX 到达，由 RX 线程逐帧解析更新 pos_pulse
+ */
+zdt_status_t mh_request_pos_all(motor_handler_t *h);
+
+/**
  * @brief  线程安全读取某电机当前位置脉冲（里程计用）
  * @param  h   handler 对象
  * @param  idx 电机下标

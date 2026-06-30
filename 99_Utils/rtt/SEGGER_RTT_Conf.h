@@ -77,8 +77,8 @@ Revision: $Rev: 15929 $
 
 #define SEGGER_RTT_PRINTF_BUFFER_SIZE             (128u)    // Size of buffer for RTT printf to bulk-send chars via RTT     (Default: 64)
 
-#define SEGGER_RTT_MODE_DEFAULT                   SEGGER_RTT_MODE_BLOCK_IF_FIFO_FULL
-//SEGGER_RTT_MODE_NO_BLOCK_SKIP // Mode for pre-initialized terminal channel (buffer 0)
+// Non-blocking log output: drop a write when the RTT buffer is full.
+#define SEGGER_RTT_MODE_DEFAULT                   SEGGER_RTT_MODE_NO_BLOCK_SKIP
 
 /*********************************************************************
 *

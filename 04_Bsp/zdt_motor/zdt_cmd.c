@@ -22,7 +22,7 @@
 #define ZDT_CODE_HOME      0x9AU   /* 触发回零 */
 #define ZDT_CODE_REPORT    0x11U   /* 定时返回 */
 #define ZDT_CODE_MULTI     0xAAU   /* 多机命令 */
-#define ZDT_CODE_POS_RPT   0x36U   /* 实时位置（上报信息码） */
+#define ZDT_CODE_POS_RPT   0x36U   /* 实时位置码：读/上报/回复共用 */
 
 #define ZDT_AST_ENABLE     0xABU   /* 使能辅助码 */
 #define ZDT_AST_REPORT     0x18U   /* 定时返回辅助码 */
@@ -198,6 +198,20 @@ zdt_status_t zdt_cmd_report(uint8_t *buf, uint16_t cap, uint8_t addr,
 }
 
 /**
+ * @brief  构建读取实时位置帧（0x36，无数据区）
+ * @param  buf/cap 输出缓存与容量
+ * @param  addr    电机地址，ZDT_ADDR_BROADCAST 为广播读
+ * @param  len     输出帧长度
+ * @retval ZDT_OK / ZDT_ERR_PARAM
+ */
+zdt_status_t zdt_cmd_read_pos(uint8_t *buf, uint16_t cap, uint8_t addr,
+                              uint16_t *len)
+{
+    // 0.读位置帧仅 addr+功能码+校验，无数据区；广播地址由 build_frame 透传
+    return build_frame(buf, cap, addr, ZDT_CODE_POS_RPT, NULL, 0U, len);
+}
+
+/**
  * @brief  构建触发回零帧（0x9A，立即执行）
  * @param  buf/cap 输出缓存与容量
  * @param  addr    电机地址
@@ -237,8 +251,8 @@ zdt_status_t zdt_multi_init(zdt_multi_t *mb, uint8_t *buf, uint16_t cap)
     mb->buf = buf;
     mb->cap = cap;
     mb->len = ZDT_MULTI_HEAD;
-    buf[0] = 0x00U;          /* 广播地址 */
-    buf[1] = ZDT_CODE_MULTI; /* 多机命令功能码 */
+    buf[0] = ZDT_ADDR_BROADCAST; /* 广播地址 */
+    buf[1] = ZDT_CODE_MULTI;     /* 多机命令功能码 */
     buf[2] = 0x00U;          /* 总长高字节，done 回填 */
     buf[3] = 0x00U;          /* 总长低字节，done 回填 */
     return ZDT_OK;
@@ -261,7 +275,7 @@ zdt_status_t zdt_multi_add_raw(zdt_multi_t *mb, const uint8_t *sub,
     // 1.校验子帧长度、结尾校验字节与地址
     /* 子帧需自带 0x6B 结尾，且地址非广播 */
     if ((sub_len < ZDT_SUB_MIN_LEN) || (sub[sub_len - 1U] != ZDT_CHK) ||
-        (sub[0] == 0x00U)) {
+        (sub[0] == ZDT_ADDR_BROADCAST)) {
         return ZDT_ERR_PARAM;
     }
     if ((uint16_t)(mb->len + sub_len + 1U) > mb->cap) { /* +1 预留末尾校验 */

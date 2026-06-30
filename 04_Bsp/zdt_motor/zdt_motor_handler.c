@@ -24,6 +24,7 @@ typedef enum {
     MH_REQ_POS,       /* 单机位置 */
     MH_REQ_HOME,      /* 单机回零 */
     MH_REQ_REPORT,    /* 定时上报 */
+    MH_REQ_READ_POS,  /* 广播读位置 */
 } mh_req_kind_t;
 
 /* TX 请求（标签联合，进 tx_queue） */
@@ -156,6 +157,9 @@ static zdt_status_t tx_dispatch(motor_handler_t *h, const mh_tx_req_t *req)
     case MH_REQ_REPORT:
         /* 同步配置总线内电机的位置上报周期 */
         return zdt_group_report(h->bus, req->data.report.period_ms);
+    case MH_REQ_READ_POS:
+        /* 一帧广播读，四轮同刻锁存并各自回复 */
+        return zdt_group_read_pos(h->bus);
     default:
         /* 队列数据异常时拒绝执行 */
         return ZDT_ERR_PARAM;
@@ -462,6 +466,28 @@ zdt_status_t mh_report(motor_handler_t *h, uint16_t period_ms)
     // 1.填写上报请求
     req.kind                  = MH_REQ_REPORT;
     req.data.report.period_ms = period_ms;
+    // 2.非阻塞投递发送请求
+    return h->os_queue->pf_q_put(h->tx_queue, &req, 0U);
+}
+
+/**
+ * @brief  投递广播读位置请求（一帧广播读，无数据区）
+ * @param  h handler 对象
+ * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT / ZDT_ERR_RES
+ */
+zdt_status_t mh_request_pos_all(motor_handler_t *h)
+{
+    mh_tx_req_t req; /* 广播读请求 */
+
+    // 0.参数合法性检查：handler 指针与启动状态
+    if (h == NULL) {
+        return ZDT_ERR_PARAM;
+    }
+    if (h->is_started == 0U) {
+        return ZDT_ERR_INIT;
+    }
+    // 1.填写广播读请求（无数据区，仅类型标签）
+    req.kind = MH_REQ_READ_POS;
     // 2.非阻塞投递发送请求
     return h->os_queue->pf_q_put(h->tx_queue, &req, 0U);
 }

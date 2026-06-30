@@ -479,3 +479,30 @@ zdt_status_t zdt_group_report(zdt_group_t *group, uint16_t period_ms)
     }
     return ret;
 }
+
+/**
+ * @brief  广播读取实时位置：一帧广播读经 pf_send 下发
+ * @param  group 电机组对象
+ * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT
+ */
+zdt_status_t zdt_group_read_pos(zdt_group_t *group)
+{
+    uint8_t frame[ZDT_FRAME_MAX]; /* 广播读位置帧缓冲 */
+    uint16_t flen = 0U;           /* 整帧长度 */
+    zdt_status_t ret = ZDT_ERR;   /* 结果 */
+
+    // 0.参数合法性检查：组对象与实例化状态
+    if (group == NULL) {
+        return ZDT_ERR_PARAM;
+    }
+    if (group->is_inited == 0U) {
+        return ZDT_ERR_INIT;
+    }
+    // 1.构造广播读位置帧（addr 0x00）并经广播口下发
+    ret = zdt_cmd_read_pos(frame, (uint16_t)sizeof(frame),
+                           ZDT_ADDR_BROADCAST, &flen);
+    if (ret != ZDT_OK) {
+        return ret;
+    }
+    return group->pf_send(frame, flen);
+}
