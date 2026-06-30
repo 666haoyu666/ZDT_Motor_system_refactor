@@ -34,10 +34,19 @@ typedef enum {
 } csvc_status_t;
 
 /**
- * @brief  初始化底盘服务：接入 chassis/map、建命令队列、起 20ms 控制任务
+ * @brief  初始化底盘服务：接入 chassis/map、建命令队列与位姿锁、起三线程
  * @retval CSVC_OK / CSVC_ERR_INIT / CSVC_ERR_RES
  */
 csvc_status_t csvc_init(void);
+
+/**
+ * @brief  重定位里程计初始位姿（上电对齐世界系，持位姿锁）
+ * @param  pos     世界系坐标，mm
+ * @param  yaw_deg 航向，deg
+ * @retval CSVC_OK / CSVC_ERR_INIT / CSVC_ERR
+ * @note   替代直接调 chassis_set_pose，避免与里程计线程并发写位姿
+ */
+csvc_status_t csvc_set_pose(map_point_t pos, float yaw_deg);
 
 /**
  * @brief  投递自由速度命令（车体系）

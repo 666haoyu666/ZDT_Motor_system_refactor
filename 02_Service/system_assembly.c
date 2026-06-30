@@ -4,9 +4,9 @@
  * @author  haoyu
  * @note    - 全工程唯一把 OS（CMSIS-OS2/FreeRTOS）注入 BSP
  *            handler 之处
- *          - 装配顺序：adp_init → mh_inst → mh_on_event →
- *            mh_start → adp_start → hwt101 → 上电握手放行
- *          - 上电握手：全部电机回上报帧才放行，杜绝裸跑，与顺序无关
+ *          - 装配顺序：pos_flags → adp_init → mh_inst → mh_on_event →
+ *            mh_start → adp_start → hwt101 → 关上报 → 广播读握手放行
+ *          - 上电握手：集齐四轮广播读回复才放行，杜绝裸跑，与顺序无关
  *          - 工程 tick = 1kHz，故 tick 数与 ms 一一对应
  */
 
@@ -34,17 +34,18 @@
 #define SYS_LOGE(fmt, ...)  do {} while (0)
 #endif
 
-#define SYS_MOTOR_REPORT_MS   2U     /* 位置上报周期 ms */
 #define SYS_MH_STACK_BYTES    2048U  /* 收发线程栈，含日志 */
-#define SYS_HANDSHAKE_POLL_MS 150U   /* 上电握手轮询间隔 ms */
+#define SYS_HANDSHAKE_POLL_MS 150U   /* 上电握手等齐超时 ms */
+#define SYS_POS_FLAGS_ALL     ((1U << ZDT_ADP_MOTOR_NUM) - 1U) /* 四轮到位掩码 */
+#define SYS_POS_FLAG(idx)     (1U << (idx))                    /* 单轮到位位 */
 
 /* ---- 被注入的对象 ---- */
 static motor_handler_t g_motor_handler;   /* 命令总线 handler */
 static uint8_t         g_assembled = 0U;  /* 组装完成标志 */
 
-/* ---- 上电握手就绪标志（RX 钩子置位；使能与上报分开记） ---- */
-static volatile uint8_t g_enabled[ZDT_ADP_MOTOR_NUM];   /* 收应答 */
-static volatile uint8_t g_reporting[ZDT_ADP_MOTOR_NUM]; /* 收上报 */
+/* ---- 上电握手 / 里程计同步：四轮到位事件标志（RX 钩子置位） ---- */
+static osEventFlagsId_t g_pos_flags = NULL;            /* 每轮一位，广播读回复置位 */
+static volatile uint8_t g_enabled[ZDT_ADP_MOTOR_NUM]; /* 收使能应答（诊断 + 重发收敛） */
 
 /* ---- CMSIS-OS2：线程 ---- */
 
@@ -209,16 +210,14 @@ static void motor_evt_cb(void *ctx, uint8_t idx, const zdt_rx_t *rx)
     if ((rx == NULL) || (idx >= ZDT_ADP_MOTOR_NUM)) {
         return;
     }
-    // 1.按帧类型置位就绪标志（使能与上报分开记）/ 记录异常
+    // 1.按帧类型置位就绪标志（ACK 记使能、POS 置到位）/ 记录异常
     switch (rx->kind) {
     case ZDT_RX_ACK:
         g_enabled[idx] = 1U;    /* 命令应答：使能等已被电机接收 */
         break;
     case ZDT_RX_POS:
-        if (g_reporting[idx] == 0U) {
-            SYS_LOGI("m%u reporting (closed-loop up)", (unsigned)idx);
-        }
-        g_reporting[idx] = 1U;  /* 收到位置上报：闭环确实在跑 */
+        /* 广播读回复：置位对应轮到位标志（握手 / 里程计线程等齐用） */
+        (void)osEventFlagsSet(g_pos_flags, SYS_POS_FLAG(idx));
         break;
     case ZDT_RX_DONE:
         SYS_LOGI("m%u done code=0x%02X",
@@ -238,8 +237,14 @@ zdt_status_t system_assembly_init(void)
 {
     zdt_status_t ret = ZDT_ERR;  /* 步骤结果 */
     uint8_t      i = 0U;         /* 电机下标 */
-    uint8_t      pending = 0U;   /* 未就绪电机数 */
+    uint32_t     flags = 0U;     /* 等齐返回的标志位 */
 
+    /* 0) 建四轮到位事件标志（RX 钩子置位，须先于起线程） */
+    g_pos_flags = osEventFlagsNew(NULL);
+    if (g_pos_flags == NULL) {
+        SYS_LOGE("pos flags alloc fail");
+        return ZDT_ERR_RES;
+    }
     /* 1) 平台适配：建电机/组 + 注入 HAL 收发，RX 回调指向蹦床 */
     ret = zdt_adp_init(motor_rx_trampoline);
     if (ret != ZDT_OK) {
@@ -281,29 +286,32 @@ zdt_status_t system_assembly_init(void)
         SYS_LOGE("hwt101 start fail");
         return ZDT_ERR;
     }
-    /* 7) 上电握手：一直重发使能 + 上报，待所有电机回上报帧才放行；
+    /* 7) 关定时上报（兜住电机 flash 残留周期），改为里程计线程广播读采集 */
+    (void)mh_report(&g_motor_handler, 0U);
+    /* 8) 上电握手：重发使能 + 广播读，集齐四轮回复才放行（§3.4）；
      *    电机晚于板子上电也会被纳管，闭环建立前不放行以杜绝裸跑
      */
     for (;;) {
-        pending = 0U;
+        /* 对未应答的电机重发使能（幂等，晚上电也纳管） */
         for (i = 0U; i < ZDT_ADP_MOTOR_NUM; i++) {
-            if (g_reporting[i] != 0U) {
-                continue; /* 该电机闭环已建立 */
+            if (g_enabled[i] == 0U) {
+                (void)mh_enable(&g_motor_handler, i, true);
             }
-            pending++;
-            (void)mh_enable(&g_motor_handler, i, true);
         }
-        (void)mh_report(&g_motor_handler, SYS_MOTOR_REPORT_MS);
-        if (pending == 0U) {
-            break; /* 全部电机就绪，放行 */
+        /* 清四位 → 一帧广播读 → 限时等齐四轮回复 */
+        (void)osEventFlagsClear(g_pos_flags, SYS_POS_FLAGS_ALL);
+        (void)mh_request_pos_all(&g_motor_handler);
+        flags = osEventFlagsWait(g_pos_flags, SYS_POS_FLAGS_ALL,
+                                 osFlagsWaitAll, SYS_HANDSHAKE_POLL_MS);
+        if ((flags & osFlagsError) == 0U) {
+            break; /* 四轮全部回复，闭环就绪，放行 */
         }
-        SYS_LOGW("waiting handshake: %u motors", (unsigned)pending);
-        (void)osDelay(SYS_HANDSHAKE_POLL_MS); /* 让 TX/RX 跑完一轮 */
+        SYS_LOGW("waiting handshake: pos=0x%X",
+                 (unsigned)(osEventFlagsGet(g_pos_flags) & SYS_POS_FLAGS_ALL));
     }
     g_assembled = 1U;
-    SYS_LOGI("all motors ready: %u motors (report %ums) + hwt101",
-             (unsigned)ZDT_ADP_MOTOR_NUM,
-             (unsigned)SYS_MOTOR_REPORT_MS);
+    SYS_LOGI("all motors ready: %u motors (broadcast-read) + hwt101",
+             (unsigned)ZDT_ADP_MOTOR_NUM);
     return ZDT_OK;
 }
 
@@ -313,4 +321,9 @@ motor_handler_t *system_motor_handler(void)
         return NULL;
     }
     return &g_motor_handler;
+}
+
+osEventFlagsId_t system_pos_flags(void)
+{
+    return g_pos_flags;
 }
