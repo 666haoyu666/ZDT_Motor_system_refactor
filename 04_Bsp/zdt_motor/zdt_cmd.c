@@ -82,8 +82,12 @@ static zdt_status_t build_frame(uint8_t *buf, uint16_t cap, uint8_t addr,
 {
     uint16_t total = (uint16_t)(plen + 3U); /* 整帧 = 地址+功能码+数据+校验 */
 
-    // 0.校验输出缓存、长度指针与容量
+    // 0.校验输出缓存、长度指针、地址与容量
     if ((buf == NULL) || (len == NULL)) {
+        return ZDT_ERR_PARAM;
+    }
+    /* 0x00 仅多机帧头(00 AA)合法，单帧命令必须指定电机 */
+    if (addr == ZDT_ADDR_BROADCAST) {
         return ZDT_ERR_PARAM;
     }
     if (total > cap) {
@@ -200,14 +204,14 @@ zdt_status_t zdt_cmd_report(uint8_t *buf, uint16_t cap, uint8_t addr,
 /**
  * @brief  构建读取实时位置帧（0x36，无数据区）
  * @param  buf/cap 输出缓存与容量
- * @param  addr    电机地址，ZDT_ADDR_BROADCAST 为广播读
+ * @param  addr    电机地址（≥1，0x00 会被拒绝）
  * @param  len     输出帧长度
  * @retval ZDT_OK / ZDT_ERR_PARAM
  */
 zdt_status_t zdt_cmd_read_pos(uint8_t *buf, uint16_t cap, uint8_t addr,
                               uint16_t *len)
 {
-    // 0.读位置帧仅 addr+功能码+校验，无数据区；广播地址由 build_frame 透传
+    // 0.读位置帧仅 addr+功能码+校验，无数据区
     return build_frame(buf, cap, addr, ZDT_CODE_POS_RPT, NULL, 0U, len);
 }
 

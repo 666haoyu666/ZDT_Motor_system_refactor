@@ -11,11 +11,55 @@
 
 #include <stddef.h> /* NULL */
 
+/* ===== 调试日志：0=不编译进固件，1=经 RTT 输出 ===== */
+#ifndef ZDT_MOTOR_LOG_EN
+#define ZDT_MOTOR_LOG_EN   1
+#endif
+#if ZDT_MOTOR_LOG_EN
+#include "cat_log.h"
+#define ZDT_LOGI(fmt, ...)  LOGI("[zdt] " fmt, ##__VA_ARGS__)
+#else
+#define ZDT_LOGI(fmt, ...)  do {} while (0)
+#endif
+
 #define ZDT_RX_MIN_FRAME   4U                       /* 最短返回帧(应答)字节 */
 #define MULTI_BUF_SPEED    (ZDT_GROUP_MAX * 8U + 8U)  /* 速度多机帧缓冲上界 */
 #define MULTI_BUF_REPORT   (ZDT_GROUP_MAX * 7U + 8U)  /* 上报多机帧缓冲上界 */
+#define MULTI_BUF_RDPOS    (ZDT_GROUP_MAX * 3U + 8U)  /* 读位置多机帧缓冲 */
 
 /* ---- 内部工具 ---- */
+
+#if ZDT_MOTOR_LOG_EN
+/**
+ * @brief  打印一帧 TX 字节
+ * @param  tag 日志标签
+ * @param  buf 帧缓冲
+ * @param  len 帧长度
+ */
+static void zdt_log_frame(const char *tag, const uint8_t *buf, uint16_t len)
+{
+    static const char s_hex[] = "0123456789ABCDEF"; /* 十六进制查表 */
+    char     data[(ZDT_FRAME_MAX * 3U) + 1U];       /* "AA "形式缓存 */
+    uint16_t i = 0U;                                /* 帧字节下标 */
+    uint16_t pos = 0U;                              /* 输出字符下标 */
+
+    if ((tag == NULL) || (buf == NULL) || (len > ZDT_FRAME_MAX)) {
+        return;
+    }
+    for (i = 0U; i < len; i++) {
+        if (i != 0U) {
+            data[pos] = ' ';
+            pos++;
+        }
+        data[pos] = s_hex[(buf[i] >> 4) & 0x0FU];
+        pos++;
+        data[pos] = s_hex[buf[i] & 0x0FU];
+        pos++;
+    }
+    data[pos] = '\0';
+    ZDT_LOGI("%s len=%u data=%s", tag, (unsigned)len, data);
+}
+#endif
 
 /** @brief 按符号选协议方向：非负=默认方向，负=反方向 */
 static zdt_dir_t pick_dir(zdt_dir_t base, bool negative)
@@ -481,14 +525,20 @@ zdt_status_t zdt_group_report(zdt_group_t *group, uint16_t period_ms)
 }
 
 /**
- * @brief  广播读取实时位置：一帧广播读经 pf_send 下发
+ * @brief  多机命令读实时位置：逐台 0x36 子帧拼 00 AA 帧下发
  * @param  group 电机组对象
- * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT
+ * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT / ZDT_ERR_RES
+ * @note   裸广播 00 36 6B 仅 1 号电机回复，须走多机命令封装
  */
 zdt_status_t zdt_group_read_pos(zdt_group_t *group)
 {
-    uint8_t frame[ZDT_FRAME_MAX]; /* 广播读位置帧缓冲 */
+    uint8_t buf[MULTI_BUF_RDPOS]; /* 多机读位置帧缓冲 */
+    uint8_t sub[ZDT_FRAME_MAX];   /* 单机读位置子帧 */
+    zdt_multi_t mb;               /* 拼帧器 */
     uint16_t flen = 0U;           /* 整帧长度 */
+    uint16_t slen = 0U;           /* 子帧长度 */
+    uint8_t i = 0U;               /* 槽位下标 */
+    uint8_t n = 0U;               /* 已加入电机数 */
     zdt_status_t ret = ZDT_ERR;   /* 结果 */
 
     // 0.参数合法性检查：组对象与实例化状态
@@ -498,11 +548,34 @@ zdt_status_t zdt_group_read_pos(zdt_group_t *group)
     if (group->is_inited == 0U) {
         return ZDT_ERR_INIT;
     }
-    // 1.构造广播读位置帧（addr 0x00）并经广播口下发
-    ret = zdt_cmd_read_pos(frame, (uint16_t)sizeof(frame),
-                           ZDT_ADDR_BROADCAST, &flen);
+    // 1.初始化多机拼帧器
+    ret = zdt_multi_init(&mb, buf, (uint16_t)sizeof(buf));
     if (ret != ZDT_OK) {
         return ret;
     }
-    return group->pf_send(frame, flen);
+    // 2.逐槽位追加已挂载电机的读位置子帧
+    for (i = 0U; i < ZDT_GROUP_MAX; i++) {
+        if (group->motors[i] == NULL) {
+            continue;
+        }
+        ret = zdt_cmd_read_pos(sub, (uint16_t)sizeof(sub),
+                               group->motors[i]->addr, &slen);
+        if (ret != ZDT_OK) {
+            return ret;
+        }
+        ret = zdt_multi_add_raw(&mb, sub, slen);
+        if (ret != ZDT_OK) {
+            return ret;
+        }
+        n++;
+    }
+    if (n == 0U) {
+        return ZDT_ERR_RES;
+    }
+    // 3.收尾整帧并经总线发送
+    ret = zdt_multi_done(&mb, &flen);
+    if (ret != ZDT_OK) {
+        return ret;
+    }
+    return group->pf_send(buf, flen);
 }

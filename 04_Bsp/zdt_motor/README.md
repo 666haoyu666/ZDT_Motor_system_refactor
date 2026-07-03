@@ -69,7 +69,7 @@ zdt_group_speed(zdt_adp_group());
 | `zdt_motor_run_pos` | 0xFD 位置模式 |
 | `zdt_motor_home` | 0x9A 回零 |
 | `zdt_group_report` | 0x11 定时上报位置 |
-| `zdt_group_read_pos` | 0x36 广播读位置（一帧，四轮各自回复） |
+| `zdt_group_read_pos` | 0x36 多机读位置（00 AA 一帧，四轮各自回复） |
 | `zdt_motor_parse` | 解析返回帧（位置 / 应答 / 完成 / 错误） |
 
 ## 返回帧分类（`zdt_rx_kind_t`，对应手册 4.1.2）

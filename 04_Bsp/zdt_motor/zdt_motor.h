@@ -181,9 +181,9 @@ zdt_status_t zdt_group_report(zdt_group_t *group,
                               uint16_t period_ms);
 
 /**
- * @brief  广播读取实时位置（一帧 addr 0x00 / 0x36），四轮各自回复
+ * @brief  多机命令读实时位置（00 AA 一帧逐台 0x36），四轮各自回复
  * @param  group 电机组对象
- * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT
+ * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT / ZDT_ERR_RES
  * @note   回复经各路独立 RX 到达，复用 zdt_motor_parse 的 ZDT_RX_POS 解析
  */
 zdt_status_t zdt_group_read_pos(zdt_group_t *group);

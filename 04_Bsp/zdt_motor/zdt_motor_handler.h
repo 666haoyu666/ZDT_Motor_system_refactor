@@ -21,7 +21,7 @@ extern "C" {
 #include <stdint.h>
 #include "zdt_motor.h"
 
-#define MH_GAP_MS_MIN     3U            /* 电机要求的最小帧间隔 ms */
+#define MH_GAP_MS_MIN     6U            /* 电机要求的最小帧间隔 ms */
 #define MH_WAIT_FOREVER   0xFFFFFFFFU   /* pf_q_get 阻塞等待 */
 
 /* ---- 注入的 OS 接口（按职责拆分，句柄一律 void*） ---- */
@@ -163,7 +163,7 @@ zdt_status_t mh_home(motor_handler_t *h, uint8_t idx, zdt_home_mode_t mode);
 zdt_status_t mh_report(motor_handler_t *h, uint16_t period_ms);
 
 /**
- * @brief  投递：广播读取总线全部电机的实时位置（一帧广播读，仅入队）
+ * @brief  投递：多机命令读总线全部电机实时位置（00 AA 一帧，仅入队）
  * @param  h handler 对象
  * @retval ZDT_OK / ZDT_ERR_PARAM / ZDT_ERR_INIT / ZDT_ERR_RES
  * @note   回复经各路独立 RX 到达，由 RX 线程逐帧解析更新 pos_pulse

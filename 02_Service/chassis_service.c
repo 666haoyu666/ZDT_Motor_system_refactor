@@ -42,7 +42,7 @@
 #define CSVC_TASK_STACK   2048U      /* 里程计/控制任务栈字节 */
 #define CSVC_GUARD_STACK  1024U      /* 监控任务栈字节 */
 #define CSVC_READ_TMO_MS  10U        /* 广播读等齐超时 ms（含 TX 3ms 门控+回帧，须 <周期） */
-#define CSVC_FAIL_MAX     10U        /* 连续超时报故障阈值 */
+#define CSVC_FAIL_MAX     100U        /* 连续超时报故障阈值 */
 #define CSVC_POS_FLAGS_ALL 0x0FU     /* 四轮到位掩码（与装配根同源） */
 #define CSVC_FAULT_FLAG   0x01U      /* 故障信号位（里程计→监控） */
 
@@ -277,13 +277,15 @@ static void csvc_ctrl_task(void *arg)
                     }
                     break;
                 default:
+                    (void)chassis_stop();
                     break;
             }
         }
+        /* 3) */
+        csvc_report(&odom);
         (void)osMutexRelease(g_pose_lock);
 
-        /* 3) 锁外上报，避免 UART 阻塞拖住里程计线程 */
-        csvc_report(&odom);
+
         wake += CSVC_PERIOD_MS;
         (void)osDelayUntil(wake);
     }

@@ -286,8 +286,8 @@ zdt_status_t system_assembly_init(void)
         SYS_LOGE("hwt101 start fail");
         return ZDT_ERR;
     }
-    /* 7) 关定时上报（兜住电机 flash 残留周期），改为里程计线程广播读采集 */
-    (void)mh_report(&g_motor_handler, 0U);
+    // /* 7) 关定时上报（兜住电机 flash 残留周期），改为里程计线程广播读采集 */
+    // (void)mh_report(&g_motor_handler, 0U);
     /* 8) 上电握手：重发使能 + 广播读，集齐四轮回复才放行（§3.4）；
      *    电机晚于板子上电也会被纳管，闭环建立前不放行以杜绝裸跑
      */
