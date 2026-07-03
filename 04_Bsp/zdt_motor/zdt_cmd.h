@@ -19,7 +19,8 @@ extern "C" {
 
 #define ZDT_RPM_MAX     30000U   /* 协议速度幅值上限 RPM */
 #define ZDT_ACCEL_MAX   0xFFU    /* 加速度档上限 */
-#define ZDT_FRAME_MAX   16U      /* 单条子帧最大字节，含头与校验，留余量 */
+#define ZDT_FRAME_MAX   36U      /* 单条子帧最大字节，含头与校验，留余量 */
+#define ZDT_ADDR_BROADCAST  0x00U   /* 多机命令帧头地址；单帧命令禁用 */
 
 /* 状态码：OK==0，适配层据此逐层映射 */
 typedef enum {
@@ -154,6 +155,17 @@ zdt_status_t zdt_cmd_home(uint8_t *buf, uint16_t cap, uint8_t addr,
  */
 zdt_status_t zdt_cmd_report(uint8_t *buf, uint16_t cap, uint8_t addr,
                             uint16_t period_ms, uint16_t *len);
+
+/**
+ * @brief  读取实时位置帧（0x36），无数据区
+ * @param  buf  输出缓存
+ * @param  cap  缓存容量
+ * @param  addr 电机地址（≥1，0x00 会被拒绝）
+ * @param  len  输出帧长度
+ * @retval ZDT_OK / ZDT_ERR_PARAM
+ */
+zdt_status_t zdt_cmd_read_pos(uint8_t *buf, uint16_t cap, uint8_t addr,
+                              uint16_t *len);
 
 /**
  * @brief  初始化多机拼帧器

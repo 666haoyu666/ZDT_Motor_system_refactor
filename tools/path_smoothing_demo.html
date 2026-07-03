@@ -1,0 +1,1347 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A* 路径平滑方法对比</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7f7;
+      --panel: #ffffff;
+      --ink: #172026;
+      --muted: #5e6b70;
+      --line: #cfd8da;
+      --field: #f9fbfb;
+      --grid: #dce4e5;
+      --obstacle: #202427;
+      --danger: rgba(198, 54, 45, 0.18);
+      --danger-line: #c6362d;
+      --raw: #8c98a1;
+      --shortcut: #2f596c;
+      --smooth: #0b8064;
+      --accent: #0f7b71;
+      --accent-strong: #095f56;
+      --orange: #d65f2a;
+      --yellow: #e4b43c;
+      --soft-green: #e7f3f0;
+      --soft-orange: #f8eee8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #ffffff;
+      color: var(--ink);
+      cursor: pointer;
+      padding: 9px 12px;
+      text-align: left;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.active {
+      border-color: var(--accent);
+      background: var(--soft-green);
+      color: #073f3a;
+    }
+
+    main {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 16px 22px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .title-group {
+      display: grid;
+      gap: 5px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .status-pill {
+      min-width: 210px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--field);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .status-pill strong {
+      color: var(--accent-strong);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 18px;
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .side,
+    .stage,
+    .explain-band {
+      min-width: 0;
+    }
+
+    .side {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .block {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    h2,
+    h3 {
+      margin: 0 0 10px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: 17px;
+    }
+
+    h3 {
+      font-size: 15px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .method-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .method-btn {
+      display: grid;
+      gap: 4px;
+      width: 100%;
+    }
+
+    .method-btn span {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .method-btn.active span {
+      color: #24534f;
+    }
+
+    .control {
+      display: grid;
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .control:first-child {
+      margin-top: 0;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .readout {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .readout strong {
+      color: var(--ink);
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .swatch {
+      flex: 0 0 22px;
+      height: 4px;
+      border-radius: 4px;
+      background: var(--raw);
+    }
+
+    .swatch.shortcut {
+      background: var(--shortcut);
+    }
+
+    .swatch.smooth {
+      background: var(--smooth);
+    }
+
+    .swatch.danger {
+      height: 12px;
+      border: 1px solid var(--danger-line);
+      background: var(--danger);
+    }
+
+    .swatch.warn {
+      height: 12px;
+      border-radius: 50%;
+      background: var(--orange);
+    }
+
+    .swatch.collision {
+      height: 12px;
+      border-radius: 50%;
+      background: var(--danger-line);
+    }
+
+    .stage {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .canvas-shell {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .canvas-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .canvas-head p {
+      font-size: 13px;
+    }
+
+    .metric-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 9px;
+      background: var(--field);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .metric strong {
+      color: var(--ink);
+    }
+
+    .map-wrap {
+      position: relative;
+      width: 100%;
+      height: min(68vh, 660px);
+      min-height: 430px;
+      background: var(--field);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .flow-img {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .explain-band {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 14px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      line-height: 1.55;
+    }
+
+    th {
+      background: #edf4f3;
+      color: #193d3a;
+      font-weight: 700;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .note-list {
+      display: grid;
+      gap: 9px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .note-list li {
+      border-left: 4px solid var(--accent);
+      padding: 8px 10px;
+      background: var(--soft-green);
+      border-radius: 0 8px 8px 0;
+      color: #23413d;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .note-list li.warn {
+      border-left-color: var(--orange);
+      background: var(--soft-orange);
+      color: #593522;
+    }
+
+    code {
+      border: 1px solid #d8e1e2;
+      border-radius: 5px;
+      padding: 2px 5px;
+      background: #f7faf9;
+      color: #143d37;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    @media (max-width: 1050px) {
+      .workspace,
+      .explain-band {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .side .block:first-child {
+        grid-row: span 2;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .status-pill {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .workspace {
+        padding: 12px;
+      }
+
+      .side {
+        grid-template-columns: 1fr;
+      }
+
+      .canvas-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .metric-row {
+        justify-content: flex-start;
+      }
+
+      .map-wrap {
+        height: 440px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="topbar">
+      <div class="title-group">
+        <h1>A* 路径平滑方法对比</h1>
+        <p class="subtitle">格点路径先做 Shortcut，再用曲线平滑，最后通过碰撞检测决定是否保留。</p>
+      </div>
+      <div class="status-pill" id="statusPill">
+        当前曲线：<strong>三次 B 样条</strong><br>
+        安全状态：等待计算
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="side">
+        <section class="block">
+          <h2>曲线选择</h2>
+          <div class="method-list" id="methodList">
+            <button class="method-btn" type="button" data-method="raw">
+              A* 原始折线
+              <span>保留全部格点，路径可行但折角最多。</span>
+            </button>
+            <button class="method-btn" type="button" data-method="shortcut">
+              Shortcut 折线
+              <span>直线可达时删掉中间点，拐点明显减少。</span>
+            </button>
+            <button class="method-btn" type="button" data-method="catmull">
+              三次样条
+              <span>经过关键点，容易跟随，也可能在拐角处过冲。</span>
+            </button>
+            <button class="method-btn active" type="button" data-method="bspline">
+              三次 B 样条
+              <span>更平滑，通常不严格经过中间控制点。</span>
+            </button>
+            <button class="method-btn" type="button" data-method="bezier">
+              分段 Bezier
+              <span>适合局部拐角塑形，长路径需要分段处理。</span>
+            </button>
+            <button class="method-btn" type="button" data-method="quintic">
+              五次多项式
+              <span>适合轨迹段，单段连接起终点时会忽略中间障碍。</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="block">
+          <h2>规划与检测参数</h2>
+          <div class="control">
+            <label for="safeRange">安全距离，单位为栅格；改变后会重新运行 A*</label>
+            <input id="safeRange" type="range" min="0.25" max="1.60" step="0.05" value="0.70">
+            <div class="readout">
+              <span>障碍物膨胀半径</span>
+              <strong id="safeValue">0.70</strong>
+            </div>
+          </div>
+          <div class="control">
+            <label for="sampleRange">曲线采样间距，数值越小检测越细</label>
+            <input id="sampleRange" type="range" min="0.12" max="0.70" step="0.02" value="0.24">
+            <div class="readout">
+              <span>采样间距</span>
+              <strong id="sampleValue">0.24</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="block">
+          <h2>图例</h2>
+          <div class="legend">
+            <div class="legend-item"><span class="swatch"></span>原始 A*</div>
+            <div class="legend-item"><span class="swatch shortcut"></span>Shortcut</div>
+            <div class="legend-item"><span class="swatch smooth"></span>当前曲线</div>
+            <div class="legend-item"><span class="swatch danger"></span>安全边界</div>
+            <div class="legend-item"><span class="swatch warn"></span>安全风险点</div>
+            <div class="legend-item"><span class="swatch collision"></span>实际碰撞点</div>
+          </div>
+        </section>
+
+        <section class="block">
+          <h2>处理流程</h2>
+          <p><code>raw_path</code> -> <code>key_path</code> -> <code>smooth_path</code> -> 碰撞检测 -> 等距采样输出。</p>
+          <img class="flow-img" id="flowImage" alt="A* 路径平滑处理流程图">
+        </section>
+      </aside>
+
+      <section class="stage">
+        <div class="canvas-shell">
+          <div class="canvas-head">
+            <div>
+              <h2>路径平滑结果</h2>
+              <p>橙点表示进入障碍物膨胀区，红叉表示实际碰到障碍物；原始 A* 路径必须没有红叉。</p>
+            </div>
+            <div class="metric-row">
+              <div class="metric">路径点 <strong id="pointCount">0</strong></div>
+              <div class="metric">路径长度 <strong id="pathLength">0.0</strong></div>
+              <div class="metric">风险点 <strong id="riskCount">0</strong></div>
+              <div class="metric">碰撞点 <strong id="collisionCount">0</strong></div>
+            </div>
+          </div>
+          <div class="map-wrap">
+            <canvas id="pathCanvas" aria-label="路径平滑和碰撞检测画布"></canvas>
+          </div>
+        </div>
+
+        <div class="explain-band">
+          <section class="block">
+            <h2>方法取舍</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>方法</th>
+                    <th>是否经过关键点</th>
+                    <th>优点</th>
+                    <th>主要风险</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>A* 原始折线</td>
+                    <td>经过全部格点</td>
+                    <td>可行性强，便于调试</td>
+                    <td>折角硬，点数多</td>
+                  </tr>
+                  <tr>
+                    <td>Shortcut 折线</td>
+                    <td>经过保留关键点</td>
+                    <td>简单有效，能直接减少冗余点</td>
+                    <td>仍然是折线，拐角不连续</td>
+                  </tr>
+                  <tr>
+                    <td>三次样条</td>
+                    <td>经过关键点</td>
+                    <td>路径连续，控制目标明确</td>
+                    <td>局部过冲后可能靠近障碍</td>
+                  </tr>
+                  <tr>
+                    <td>三次 B 样条</td>
+                    <td>通常不经过中间点</td>
+                    <td>平滑度高，曲率变化更温和</td>
+                    <td>曲线可能从障碍物边界内侧抹过去</td>
+                  </tr>
+                  <tr>
+                    <td>Bezier</td>
+                    <td>分段时可经过端点</td>
+                    <td>局部形状容易控制</td>
+                    <td>长路径整体处理不如样条自然</td>
+                  </tr>
+                  <tr>
+                    <td>五次多项式</td>
+                    <td>通常只约束起终点</td>
+                    <td>适合速度、加速度连续的轨迹段</td>
+                    <td>不是纯几何路径平滑的首选</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="block">
+            <h2>落地建议</h2>
+            <ul class="note-list">
+              <li>A* 搜索前先膨胀障碍物，给后续平滑留下安全余量。</li>
+              <li>安全距离现在同时参与 A* 规划和后续检测；小幅调节可能仍保持同一条离散最优路径。</li>
+              <li>Shortcut 后保留的点是曲线控制点，不是最终输出点。</li>
+              <li class="warn">任何样条平滑之后都要重新做碰撞检测，不能只看曲线是否好看。</li>
+              <li>最终给控制层的路径建议使用等距采样点，并补充 <code>yaw</code> 和曲率。</li>
+            </ul>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("pathCanvas");
+    const ctx = canvas.getContext("2d");
+    const methodButtons = Array.from(document.querySelectorAll(".method-btn"));
+    const safeRange = document.getElementById("safeRange");
+    const sampleRange = document.getElementById("sampleRange");
+    const safeValue = document.getElementById("safeValue");
+    const sampleValue = document.getElementById("sampleValue");
+    const pointCount = document.getElementById("pointCount");
+    const pathLength = document.getElementById("pathLength");
+    const riskCount = document.getElementById("riskCount");
+    const collisionCount = document.getElementById("collisionCount");
+    const statusPill = document.getElementById("statusPill");
+    const flowImage = document.getElementById("flowImage");
+
+    const grid = { cols: 26, rows: 18 };
+    const startPoint = { x: 2, y: 15 };
+    const goalPoint = { x: 23, y: 8 };
+
+    const obstacles = [
+      { x: 4, y: 6, w: 3, h: 4 },
+      { x: 8, y: 13, w: 5, h: 2 },
+      { x: 12, y: 2, w: 3, h: 4 },
+      { x: 16, y: 8, w: 4, h: 5 },
+      { x: 20, y: 3, w: 2, h: 3 }
+    ];
+
+    const methodNames = {
+      raw: "A* 原始折线",
+      shortcut: "Shortcut 折线",
+      catmull: "三次样条",
+      bspline: "三次 B 样条",
+      bezier: "分段 Bezier",
+      quintic: "五次多项式"
+    };
+
+    let activeMethod = "bspline";
+    let view = { scale: 1, ox: 0, oy: 0, dpr: 1 };
+    let rawPath = [];
+    let shortcutPath = [];
+    let planFailed = false;
+
+    function add(a, b) {
+      return { x: a.x + b.x, y: a.y + b.y };
+    }
+
+    function sub(a, b) {
+      return { x: a.x - b.x, y: a.y - b.y };
+    }
+
+    function mul(a, s) {
+      return { x: a.x * s, y: a.y * s };
+    }
+
+    function len(a) {
+      return Math.hypot(a.x, a.y);
+    }
+
+    function normalize(a) {
+      const d = len(a);
+      if (d < 0.0001) {
+        return { x: 0, y: 0 };
+      }
+      return { x: a.x / d, y: a.y / d };
+    }
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function lerp(a, b, t) {
+      return {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t
+      };
+    }
+
+    function nodeKey(x, y) {
+      return `${x},${y}`;
+    }
+
+    function nearestObstacleDistance(p) {
+      let best = Infinity;
+      obstacles.forEach((rect) => {
+        best = Math.min(best, distanceToObstacle(p, rect));
+      });
+      return best;
+    }
+
+    function isBlockedPoint(p, margin) {
+      if (p.x < 0 || p.x > grid.cols || p.y < 0 || p.y > grid.rows) {
+        return true;
+      }
+      return obstacles.some((rect) => {
+        return pointInObstacle(p, rect) || distanceToObstacle(p, rect) <= margin;
+      });
+    }
+
+    function isLineClear(a, b, margin) {
+      const d = distance(a, b);
+      const count = Math.max(1, Math.ceil(d / 0.08));
+      for (let i = 0; i <= count; i += 1) {
+        if (isBlockedPoint(lerp(a, b, i / count), margin)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function clearancePenalty(p, margin) {
+      const comfortDistance = margin + 1.4;
+      const nearest = nearestObstacleDistance(p);
+      if (nearest >= comfortDistance) {
+        return 0;
+      }
+      const ratio = (comfortDistance - nearest) / comfortDistance;
+      return ratio * ratio * 2.5;
+    }
+
+    function octileHeuristic(a, b) {
+      const dx = Math.abs(a.x - b.x);
+      const dy = Math.abs(a.y - b.y);
+      return Math.max(dx, dy) + 0.41421356 * Math.min(dx, dy);
+    }
+
+    function reconstructPath(cameFrom, endKey) {
+      const path = [];
+      let currentKey = endKey;
+      while (currentKey) {
+        const parts = currentKey.split(",");
+        path.push({ x: Number(parts[0]), y: Number(parts[1]) });
+        currentKey = cameFrom.get(currentKey);
+      }
+      return path.reverse();
+    }
+
+    function planAStar(margin) {
+      const start = { x: Math.round(startPoint.x), y: Math.round(startPoint.y) };
+      const goal = { x: Math.round(goalPoint.x), y: Math.round(goalPoint.y) };
+      const startKey = nodeKey(start.x, start.y);
+      const goalKey = nodeKey(goal.x, goal.y);
+      const open = [{ ...start, key: startKey, f: octileHeuristic(start, goal) }];
+      const closed = new Set();
+      const cameFrom = new Map();
+      const gScore = new Map([[startKey, 0]]);
+      const dirs = [
+        { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+        { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 }
+      ];
+
+      while (open.length > 0) {
+        let bestIndex = 0;
+        for (let i = 1; i < open.length; i += 1) {
+          if (open[i].f < open[bestIndex].f) {
+            bestIndex = i;
+          }
+        }
+        const current = open.splice(bestIndex, 1)[0];
+        if (current.key === goalKey) {
+          return reconstructPath(cameFrom, goalKey);
+        }
+        if (closed.has(current.key)) {
+          continue;
+        }
+        closed.add(current.key);
+
+        dirs.forEach((dir) => {
+          const next = { x: current.x + dir.x, y: current.y + dir.y };
+          const nextKey = nodeKey(next.x, next.y);
+          if (closed.has(nextKey) || !isLineClear(current, next, margin)) {
+            return;
+          }
+          const moveCost = Math.hypot(dir.x, dir.y);
+          const tentativeG = gScore.get(current.key) + moveCost + clearancePenalty(next, margin);
+          const knownG = gScore.has(nextKey) ? gScore.get(nextKey) : Infinity;
+          if (tentativeG >= knownG) {
+            return;
+          }
+          cameFrom.set(nextKey, current.key);
+          gScore.set(nextKey, tentativeG);
+          open.push({
+            ...next,
+            key: nextKey,
+            f: tentativeG + octileHeuristic(next, goal)
+          });
+        });
+      }
+
+      return [];
+    }
+
+    function buildShortcutPath(points, margin) {
+      if (points.length < 3) {
+        return points.slice();
+      }
+      const out = [points[0]];
+      let anchor = 0;
+      while (anchor < points.length - 1) {
+        let target = points.length - 1;
+        while (target > anchor + 1 && !isLineClear(points[anchor], points[target], margin)) {
+          target -= 1;
+        }
+        out.push(points[target]);
+        anchor = target;
+      }
+      return out;
+    }
+
+    function replan() {
+      const margin = Number(safeRange.value);
+      rawPath = planAStar(margin);
+      shortcutPath = buildShortcutPath(rawPath, margin);
+      planFailed = rawPath.length === 0;
+    }
+
+    function toPx(p) {
+      return {
+        x: view.ox + p.x * view.scale,
+        y: view.oy + p.y * view.scale
+      };
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      view.dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * view.dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * view.dpr));
+      ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+      const pad = 34;
+      const sx = (rect.width - pad * 2) / grid.cols;
+      const sy = (rect.height - pad * 2) / grid.rows;
+      view.scale = Math.max(12, Math.min(sx, sy));
+      view.ox = (rect.width - grid.cols * view.scale) / 2;
+      view.oy = (rect.height - grid.rows * view.scale) / 2;
+      draw();
+    }
+
+    function polylineLength(points) {
+      let total = 0;
+      for (let i = 1; i < points.length; i += 1) {
+        total += distance(points[i - 1], points[i]);
+      }
+      return total;
+    }
+
+    function samplePolyline(points, step) {
+      if (points.length < 2) {
+        return points.slice();
+      }
+      const out = [points[0]];
+      for (let i = 1; i < points.length; i += 1) {
+        const a = points[i - 1];
+        const b = points[i];
+        const d = distance(a, b);
+        const count = Math.max(1, Math.ceil(d / step));
+        for (let k = 1; k <= count; k += 1) {
+          out.push(lerp(a, b, k / count));
+        }
+      }
+      return out;
+    }
+
+    function catmullRom(points, step) {
+      if (points.length < 3) {
+        return samplePolyline(points, step);
+      }
+      const out = [];
+      for (let i = 0; i < points.length - 1; i += 1) {
+        const p0 = points[Math.max(0, i - 1)];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[Math.min(points.length - 1, i + 2)];
+        const count = Math.max(8, Math.ceil(distance(p1, p2) / step));
+        for (let k = 0; k < count; k += 1) {
+          const t = k / count;
+          const t2 = t * t;
+          const t3 = t2 * t;
+          out.push({
+            x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+            y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+          });
+        }
+      }
+      out.push(points[points.length - 1]);
+      return out;
+    }
+
+    function cubicBSpline(points, step) {
+      if (points.length < 4) {
+        return samplePolyline(points, step);
+      }
+      const controls = [
+        points[0],
+        points[0],
+        points[0],
+        ...points.slice(1, -1),
+        points[points.length - 1],
+        points[points.length - 1],
+        points[points.length - 1]
+      ];
+      const out = [];
+      for (let i = 0; i < controls.length - 3; i += 1) {
+        const p0 = controls[i];
+        const p1 = controls[i + 1];
+        const p2 = controls[i + 2];
+        const p3 = controls[i + 3];
+        const localDistance = distance(p1, p2) || 1;
+        const count = Math.max(8, Math.ceil(localDistance / step));
+        for (let k = 0; k < count; k += 1) {
+          const t = k / count;
+          const t2 = t * t;
+          const t3 = t2 * t;
+          const b0 = (-t3 + 3 * t2 - 3 * t + 1) / 6;
+          const b1 = (3 * t3 - 6 * t2 + 4) / 6;
+          const b2 = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6;
+          const b3 = t3 / 6;
+          out.push({
+            x: b0 * p0.x + b1 * p1.x + b2 * p2.x + b3 * p3.x,
+            y: b0 * p0.y + b1 * p1.y + b2 * p2.y + b3 * p3.y
+          });
+        }
+      }
+      out.push(points[points.length - 1]);
+      return out;
+    }
+
+    function bezier(points, step) {
+      if (points.length < 3) {
+        return samplePolyline(points, step);
+      }
+      const out = [];
+      for (let i = 0; i < points.length - 1; i += 1) {
+        const p0 = points[Math.max(0, i - 1)];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[Math.min(points.length - 1, i + 2)];
+        const tangentA = mul(normalize(sub(p2, p0)), distance(p1, p2) * 0.34);
+        const tangentB = mul(normalize(sub(p3, p1)), distance(p1, p2) * 0.34);
+        const c1 = add(p1, tangentA);
+        const c2 = sub(p2, tangentB);
+        const count = Math.max(8, Math.ceil(distance(p1, p2) / step));
+        for (let k = 0; k < count; k += 1) {
+          const t = k / count;
+          const mt = 1 - t;
+          out.push({
+            x: mt * mt * mt * p1.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * p2.x,
+            y: mt * mt * mt * p1.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * p2.y
+          });
+        }
+      }
+      out.push(points[points.length - 1]);
+      return out;
+    }
+
+    function quintic(points, step) {
+      if (points.length < 2) {
+        return points.slice();
+      }
+      const start = points[0];
+      const end = points[points.length - 1];
+      const startDir = normalize(sub(points[1], start));
+      const endDir = normalize(sub(end, points[points.length - 2]));
+      const chord = distance(start, end);
+      const v0 = mul(startDir, chord * 0.72);
+      const v1 = mul(endDir, chord * 0.72);
+      const ax = quinticCoefficients(start.x, end.x, v0.x, v1.x, 0, 0);
+      const ay = quinticCoefficients(start.y, end.y, v0.y, v1.y, 0, 0);
+      const count = Math.max(60, Math.ceil(chord / step));
+      const out = [];
+      for (let k = 0; k <= count; k += 1) {
+        const t = k / count;
+        out.push({ x: evalQuintic(ax, t), y: evalQuintic(ay, t) });
+      }
+      return out;
+    }
+
+    function quinticCoefficients(p0, p1, v0, v1, acc0, acc1) {
+      const a0 = p0;
+      const a1 = v0;
+      const a2 = acc0 / 2;
+      const b0 = p1 - a0 - a1 - a2;
+      const b1 = v1 - a1 - 2 * a2;
+      const b2 = acc1 - 2 * a2;
+      const a3 = 10 * b0 - 4 * b1 + 0.5 * b2;
+      const a4 = -15 * b0 + 7 * b1 - b2;
+      const a5 = 6 * b0 - 3 * b1 + 0.5 * b2;
+      return [a0, a1, a2, a3, a4, a5];
+    }
+
+    function evalQuintic(a, t) {
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const t4 = t3 * t;
+      const t5 = t4 * t;
+      return a[0] + a[1] * t + a[2] * t2 + a[3] * t3 + a[4] * t4 + a[5] * t5;
+    }
+
+    function currentPath() {
+      const step = Number(sampleRange.value);
+      const controls = shortcutPath.length >= 2 ? shortcutPath : rawPath;
+      if (activeMethod === "raw") {
+        return samplePolyline(rawPath, step);
+      }
+      if (activeMethod === "shortcut") {
+        return samplePolyline(controls, step);
+      }
+      if (activeMethod === "catmull") {
+        return catmullRom(controls, step);
+      }
+      if (activeMethod === "bezier") {
+        return bezier(controls, step);
+      }
+      if (activeMethod === "quintic") {
+        return quintic(controls, step);
+      }
+      return cubicBSpline(controls, step);
+    }
+
+    function distanceToObstacle(p, rect) {
+      const cx = Math.max(rect.x, Math.min(p.x, rect.x + rect.w));
+      const cy = Math.max(rect.y, Math.min(p.y, rect.y + rect.h));
+      return Math.hypot(p.x - cx, p.y - cy);
+    }
+
+    function pointInObstacle(p, rect) {
+      return p.x >= rect.x && p.x <= rect.x + rect.w && p.y >= rect.y && p.y <= rect.y + rect.h;
+    }
+
+    function inspectPath(points, safe) {
+      const safety = [];
+      const collision = [];
+      points.forEach((p) => {
+        if (p.x < 0 || p.x > grid.cols || p.y < 0 || p.y > grid.rows) {
+          collision.push(p);
+          return;
+        }
+        if (obstacles.some((rect) => pointInObstacle(p, rect))) {
+          collision.push(p);
+          return;
+        }
+        if (obstacles.some((rect) => distanceToObstacle(p, rect) < safe)) {
+          safety.push(p);
+        }
+      });
+      return { safety, collision };
+    }
+
+    function drawGrid() {
+      const w = grid.cols * view.scale;
+      const h = grid.rows * view.scale;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(view.ox, view.oy, w, h);
+      ctx.strokeStyle = getCss("--grid");
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= grid.cols; x += 1) {
+        const px = view.ox + x * view.scale;
+        ctx.beginPath();
+        ctx.moveTo(px, view.oy);
+        ctx.lineTo(px, view.oy + h);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= grid.rows; y += 1) {
+        const py = view.oy + y * view.scale;
+        ctx.beginPath();
+        ctx.moveTo(view.ox, py);
+        ctx.lineTo(view.ox + w, py);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "#607076";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(view.ox, view.oy, w, h);
+    }
+
+    function drawObstacles(safe) {
+      obstacles.forEach((rect) => {
+        const p = toPx(rect);
+        const s = view.scale;
+        ctx.fillStyle = getCss("--danger");
+        ctx.strokeStyle = getCss("--danger-line");
+        ctx.lineWidth = 1;
+        ctx.fillRect(p.x - safe * s, p.y - safe * s, (rect.w + safe * 2) * s, (rect.h + safe * 2) * s);
+        ctx.strokeRect(p.x - safe * s, p.y - safe * s, (rect.w + safe * 2) * s, (rect.h + safe * 2) * s);
+        ctx.fillStyle = getCss("--obstacle");
+        ctx.fillRect(p.x, p.y, rect.w * s, rect.h * s);
+      });
+    }
+
+    function drawPath(points, color, width, dashed) {
+      if (!points.length) {
+        return;
+      }
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.setLineDash(dashed ? [8, 8] : []);
+      ctx.beginPath();
+      points.forEach((p, index) => {
+        const q = toPx(p);
+        if (index === 0) {
+          ctx.moveTo(q.x, q.y);
+        } else {
+          ctx.lineTo(q.x, q.y);
+        }
+      });
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPoints(points, color, radius, every = 1) {
+      ctx.fillStyle = color;
+      points.forEach((p, index) => {
+        if (index % every !== 0) {
+          return;
+        }
+        const q = toPx(p);
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function drawStartGoal() {
+      const start = toPx(startPoint);
+      const goal = toPx(goalPoint);
+      ctx.fillStyle = "#0b8064";
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 12px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("S", start.x, start.y);
+
+      ctx.fillStyle = getCss("--orange");
+      ctx.beginPath();
+      ctx.arc(goal.x, goal.y, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText("G", goal.x, goal.y);
+    }
+
+    function drawRisk(inspection) {
+      ctx.fillStyle = getCss("--orange");
+      inspection.safety.forEach((p) => {
+        const q = toPx(p);
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.strokeStyle = getCss("--danger-line");
+      ctx.fillStyle = "rgba(198, 54, 45, 0.88)";
+      ctx.lineWidth = 2;
+      inspection.collision.forEach((p) => {
+        const q = toPx(p);
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(q.x - 7, q.y - 7);
+        ctx.lineTo(q.x + 7, q.y + 7);
+        ctx.moveTo(q.x + 7, q.y - 7);
+        ctx.lineTo(q.x - 7, q.y + 7);
+        ctx.stroke();
+      });
+    }
+
+    function draw() {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) {
+        return;
+      }
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      const safe = Number(safeRange.value);
+      const path = currentPath();
+      const inspection = inspectPath(path, safe);
+
+      drawGrid();
+      drawObstacles(safe);
+      drawPath(rawPath, getCss("--raw"), 2, true);
+      drawPath(shortcutPath, getCss("--shortcut"), 3, true);
+      drawPoints(shortcutPath, getCss("--yellow"), 4);
+      drawPath(path, getCss("--smooth"), 5, false);
+      drawPoints(path, getCss("--smooth"), 2, 9);
+      drawRisk(inspection);
+      drawStartGoal();
+      updateReadout(path, inspection);
+    }
+
+    function updateReadout(path, inspection) {
+      const totalLength = polylineLength(path);
+      pointCount.textContent = String(path.length);
+      pathLength.textContent = totalLength.toFixed(1);
+      riskCount.textContent = String(inspection.safety.length);
+      collisionCount.textContent = String(inspection.collision.length);
+      safeValue.textContent = Number(safeRange.value).toFixed(2);
+      sampleValue.textContent = Number(sampleRange.value).toFixed(2);
+      let safeText = "无实际碰撞，未进入障碍膨胀区";
+      if (planFailed) {
+        safeText = "当前膨胀半径下没有找到可行路径";
+      } else if (inspection.collision.length > 0) {
+        safeText = `发现 ${inspection.collision.length} 个实际碰撞点`;
+      } else if (inspection.safety.length > 0) {
+        safeText = `无实际碰撞，${inspection.safety.length} 个采样点进入安全边界`;
+      }
+      statusPill.innerHTML = `当前曲线：<strong>${methodNames[activeMethod]}</strong><br>安全状态：${safeText}`;
+    }
+
+    function drawFlowImage() {
+      const flowCanvas = document.createElement("canvas");
+      const w = 900;
+      const h = 220;
+      const fctx = flowCanvas.getContext("2d");
+      flowCanvas.width = w;
+      flowCanvas.height = h;
+      fctx.fillStyle = "#ffffff";
+      fctx.fillRect(0, 0, w, h);
+
+      const nodes = [
+        { x: 85, label: "A* 原始路径", note: "raw_path" },
+        { x: 245, label: "Shortcut", note: "删冗余点" },
+        { x: 405, label: "样条平滑", note: "生成曲线" },
+        { x: 565, label: "碰撞检测", note: "安全边界" },
+        { x: 725, label: "等距采样", note: "输出点列" }
+      ];
+
+      fctx.strokeStyle = "#cfd8da";
+      fctx.lineWidth = 2;
+      fctx.beginPath();
+      fctx.moveTo(nodes[0].x, 110);
+      for (let i = 1; i < nodes.length; i += 1) {
+        fctx.lineTo(nodes[i].x, 110);
+      }
+      fctx.stroke();
+
+      nodes.forEach((node, index) => {
+        fctx.fillStyle = index === 3 ? "#f8eee8" : "#e7f3f0";
+        fctx.strokeStyle = index === 3 ? "#d65f2a" : "#0f7b71";
+        fctx.lineWidth = 2;
+        fctx.beginPath();
+        roundedRect(fctx, node.x - 62, 64, 124, 92, 8);
+        fctx.fill();
+        fctx.stroke();
+        fctx.fillStyle = "#172026";
+        fctx.font = "700 20px Microsoft YaHei, Arial";
+        fctx.textAlign = "center";
+        fctx.fillText(node.label, node.x, 101);
+        fctx.fillStyle = "#5e6b70";
+        fctx.font = "16px Microsoft YaHei, Arial";
+        fctx.fillText(node.note, node.x, 130);
+      });
+
+      for (let i = 0; i < nodes.length - 1; i += 1) {
+        const x = (nodes[i].x + nodes[i + 1].x) / 2;
+        fctx.fillStyle = "#0f7b71";
+        fctx.beginPath();
+        fctx.moveTo(x + 18, 110);
+        fctx.lineTo(x + 4, 101);
+        fctx.lineTo(x + 4, 119);
+        fctx.closePath();
+        fctx.fill();
+      }
+
+      flowImage.src = flowCanvas.toDataURL("image/png");
+    }
+
+    function roundedRect(target, x, y, width, height, radius) {
+      target.moveTo(x + radius, y);
+      target.lineTo(x + width - radius, y);
+      target.quadraticCurveTo(x + width, y, x + width, y + radius);
+      target.lineTo(x + width, y + height - radius);
+      target.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      target.lineTo(x + radius, y + height);
+      target.quadraticCurveTo(x, y + height, x, y + height - radius);
+      target.lineTo(x, y + radius);
+      target.quadraticCurveTo(x, y, x + radius, y);
+      target.closePath();
+    }
+
+    function getCss(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    methodButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        activeMethod = button.dataset.method;
+        methodButtons.forEach((item) => item.classList.toggle("active", item === button));
+        draw();
+      });
+    });
+
+    safeRange.addEventListener("input", () => {
+      replan();
+      draw();
+    });
+    sampleRange.addEventListener("input", draw);
+    window.addEventListener("resize", resizeCanvas);
+
+    drawFlowImage();
+    replan();
+    resizeCanvas();
+  </script>
+</body>
+</html>

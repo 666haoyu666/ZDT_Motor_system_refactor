@@ -2,7 +2,7 @@
  * @file    app_main.c
  * @brief   应用入口：上电时序 + BLE 调度
  * @author  haoyu
- * @note    - 时序：system_assembly_init → csvc_init → chassis_set_pose → BLE
+ * @note    - 时序：system_assembly_init → csvc_init → csvc_set_pose → BLE
  *          - BLE：ISR(on_rx_raw)入队 → app_task 取队 ble_adp_process → on_nav
  *          - on_nav 给 rad，本层转 deg 再投 csvc（csvc 对上统一 deg）
  */
@@ -15,7 +15,6 @@
 
 #include "system_assembly.h"
 #include "chassis_service.h"
-#include "chassis_adaption.h"
 #include "ble_adaption.h"
 
 /* ===== 调试日志：0=不编译进固件，1=经 RTT 输出 ===== */
@@ -126,25 +125,29 @@ app_status_t app_init(void)
         APP_LOGE("assembly init fail");
         return APP_ERR;
     }
+    APP_LOGI("assembly init success");
     /* 2) 起底盘服务（接入 chassis + map + 20ms 控制任务） */
     if (csvc_init() != CSVC_OK) {
         APP_LOGE("chassis service init fail");
         return APP_ERR;
     }
+    APP_LOGI("chassis service init success");
     /* 3) 里程计对齐世界系初始位姿 */
     start.x_mm = (int16_t)APP_START_X_MM;
     start.y_mm = (int16_t)APP_START_Y_MM;
-    (void)chassis_set_pose(start, APP_START_YAW_DEG);
+    (void)csvc_set_pose(start, APP_START_YAW_DEG);
     /* 4) BLE 字节队列 + 适配层（注入 ISR 入队 / 命令上抛回调） */
     g_ble_q = osMessageQueueNew(APP_BLE_QDEPTH, sizeof(app_chunk_t), NULL);
     if (g_ble_q == NULL) {
         APP_LOGE("ble queue fail");
         return APP_ERR;
     }
+    APP_LOGI("ble queue init success");
     if (ble_adp_init(app_on_rx_raw, app_on_nav) != BLE_OK) {
         APP_LOGE("ble adp init fail");
         return APP_ERR;
     }
+    APP_LOGI("ble adp init success");
     /* 5) 起 BLE 调度任务 */
     g_task = osThreadNew(app_task, NULL, &g_task_attr);
     if (g_task == NULL) {

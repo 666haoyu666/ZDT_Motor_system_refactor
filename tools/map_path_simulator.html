@@ -1,0 +1,1648 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>小车路径规划仿真</title>
+  <style>
+    :root {
+      --bg: #f4f6f4;
+      --panel: #ffffff;
+      --ink: #18211b;
+      --muted: #64706a;
+      --line: #cfd7d1;
+      --field: #f8faf7;
+      --grid: #d7ded8;
+      --axis: #405047;
+      --obstacle: #111111;
+      --raw-path: #91a0b7;
+      --path: #1269ff;
+      --trajectory: #14845e;
+      --target: #d0332f;
+      --lookahead: #7a3fc4;
+      --projection: #f08a24;
+      --start-zone: #1f9d71;
+      --start-zone-fill: rgba(31, 157, 113, 0.12);
+      --accent: #167c62;
+      --accent-strong: #0d5f4a;
+      --warn: #9b5b15;
+      --bad: #b42318;
+      --ok: #126b49;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      padding: 8px 12px;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    button.primary:hover {
+      background: var(--accent-strong);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    input {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 6px 8px;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      min-height: 0;
+      height: 18px;
+      padding: 0;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #eef3ef;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      image-rendering: pixelated;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .title {
+      min-width: 220px;
+      display: grid;
+      gap: 2px;
+    }
+
+    .title strong {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .title span,
+    .map-info,
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .layout {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+    }
+
+    .stage {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .map-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .map-info strong {
+      color: var(--ink);
+    }
+
+    .canvas-wrap {
+      min-height: 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    #simCanvas {
+      width: min(100%, calc((100vh - 170px) * 2));
+      height: auto;
+      max-height: calc(100vh - 170px);
+      aspect-ratio: 2 / 1;
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--field);
+      cursor: crosshair;
+    }
+
+    .side {
+      min-height: 0;
+      border-left: 1px solid var(--line);
+      background: #ffffff;
+      overflow: auto;
+    }
+
+    .section {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .check-line {
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f7faf8;
+      color: var(--ink);
+      line-height: 1.5;
+      font-size: 13px;
+    }
+
+    .status.ok {
+      border-color: rgba(18, 107, 73, 0.35);
+      color: var(--ok);
+    }
+
+    .status.bad {
+      border-color: rgba(180, 35, 24, 0.35);
+      color: var(--bad);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .metric {
+      min-height: 58px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 18px;
+      line-height: 1.1;
+      word-break: break-word;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+
+      #simCanvas {
+        width: 100%;
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <canvas id="brandCanvas" class="brand-mark" width="30" height="30"></canvas>
+      <div class="title">
+        <strong>小车路径规划仿真</strong>
+        <span>x 竖直向上，y 水平向左，20mm 栅格</span>
+      </div>
+      <div class="actions">
+        <button id="planBtn" class="primary">规划路径</button>
+        <button id="startBtn">开始仿真</button>
+        <button id="pauseBtn" disabled>暂停</button>
+        <button id="resetBtn">复位小车</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="stage">
+        <div class="map-info">
+          <span><strong>x：</strong>0..2500mm 向上</span>
+          <span><strong>y：</strong>0..5000mm 向左</span>
+          <span><strong>黑色：</strong>障碍</span>
+          <span><strong>绿色：</strong>轨迹</span>
+          <span><strong>紫色：</strong>前视点</span>
+          <span><strong>橙色：</strong>投影点</span>
+          <span><strong>操作：</strong>点击地图设置目标点</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="simCanvas"></canvas>
+        </div>
+      </section>
+
+      <aside class="side">
+        <section class="section">
+          <h2>目标点</h2>
+          <div class="grid-2">
+            <label>
+              目标 x mm
+              <input id="goalX" type="number" min="0" max="2500" step="50" value="1950">
+            </label>
+            <label>
+              目标 y mm
+              <input id="goalY" type="number" min="0" max="5000" step="50" value="1200">
+            </label>
+          </div>
+          <div class="status" id="statusBox">点击地图选择目标点，或直接规划默认目标。</div>
+        </section>
+
+        <section class="section">
+          <h2>路径后处理</h2>
+          <div class="grid-2">
+            <label class="check-line">
+              <input id="showRawPath" type="checkbox" checked>
+              显示原始 A*
+            </label>
+            <label class="check-line">
+              <input id="shortcutEnabled" type="checkbox" checked>
+              视线剪枝
+            </label>
+            <label>
+              采样间距 mm
+              <input id="sampleSpacing" type="number" min="50" max="300" step="50" value="50">
+            </label>
+          </div>
+          <div class="hint">参数变化后只重新处理当前路径，不重新改变起点和目标点。</div>
+        </section>
+
+        <section class="section">
+          <h2>跟踪控制</h2>
+          <div class="grid-2">
+            <label>
+              前视距离 mm
+              <input id="lookaheadDistance" type="number" min="100" max="500" step="50" value="200">
+            </label>
+            <label>
+              最大速度 mm/s
+              <input id="maxSpeed" type="number" min="10" max="600" step="10" value="100">
+            </label>
+            <label>
+              位置 Kp
+              <input id="positionKp" type="number" min="0.1" max="5" step="0.1" value="1.0">
+            </label>
+            <label class="check-line">
+              <input id="lineCorrectionEnabled" type="checkbox" checked>
+              启用贴线修正
+            </label>
+            <label>
+              贴线 Kp
+              <input id="lineKp" type="number" min="0" max="5" step="0.05" value="0.30">
+            </label>
+            <label>
+              贴线 Kd
+              <input id="lineKd" type="number" min="0" max="2" step="0.01" value="0.05">
+            </label>
+            <label>
+              减速距离 mm
+              <input id="decelDistance" type="number" min="100" max="1200" step="50" value="300">
+            </label>
+            <label>
+              停止半径 mm
+              <input id="stopRadius" type="number" min="20" max="200" step="10" value="80">
+            </label>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Yaw 姿态</h2>
+          <div class="grid-2">
+            <label class="check-line">
+              <input id="yawFollowTangent" type="checkbox">
+              yaw 追随切线
+            </label>
+            <label>
+              固定 yaw deg
+              <input id="fixedYaw" type="number" min="-180" max="180" step="5" value="0">
+            </label>
+            <label>
+              yaw Kp
+              <input id="yawKp" type="number" min="0.1" max="8" step="0.1" value="2.0">
+            </label>
+            <label>
+              角速度限幅 deg/s
+              <input id="yawRateLimit" type="number" min="10" max="360" step="10" value="90">
+            </label>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>状态</h2>
+          <div class="metrics">
+            <div class="metric"><span>当前坐标</span><strong id="poseText">1200,350</strong></div>
+            <div class="metric"><span>当前 yaw</span><strong id="yawText">0deg</strong></div>
+            <div class="metric"><span>目标 yaw</span><strong id="targetYawText">0deg</strong></div>
+            <div class="metric"><span>前视点</span><strong id="lookaheadText">-</strong></div>
+            <div class="metric"><span>投影点</span><strong id="projectionText">-</strong></div>
+            <div class="metric"><span>贴线误差</span><strong id="crossErrorText">0mm</strong></div>
+            <div class="metric"><span>速度</span><strong id="speedText">0</strong></div>
+            <div class="metric"><span>路径点</span><strong id="pathText">0 / 0</strong></div>
+            <div class="metric"><span>当前索引</span><strong id="indexText">0</strong></div>
+            <div class="metric"><span>规划状态</span><strong id="planText">未规划</strong></div>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    "use strict";
+
+    const MAP_X_MAX_MM = 2500;
+    const MAP_Y_MAX_MM = 5000;
+    const MAP_RESOLUTION_MM = 50;
+    const GRID_X_COUNT = Math.floor(MAP_X_MAX_MM / MAP_RESOLUTION_MM) + 1;
+    const GRID_Y_COUNT = Math.floor(MAP_Y_MAX_MM / MAP_RESOLUTION_MM) + 1;
+    const GRID_X_MAX = GRID_X_COUNT - 1;
+    const GRID_Y_MAX = GRID_Y_COUNT - 1;
+    const NODE_COUNT = GRID_X_COUNT * GRID_Y_COUNT;
+    const START_X_MM = 1200;
+    const START_Y_MM = 350;
+    const START_ZONE_SIZE_MM = 440;
+    const ASTAR_STRAIGHT_COST = 10;
+    const ASTAR_DIAGONAL_COST = 14;
+    const STATE_NONE = 0;
+    const STATE_OPEN = 1;
+    const STATE_CLOSED = 2;
+    const INF_COST = 0x3fffffff;
+
+    const obstacleDefs = [
+      { type: "rect", xMin: 2100, yMin: 1900, xMax: 2500, yMax: 3100 },
+      { type: "rect", xMin: 0, yMin: 1900, xMax: 400, yMax: 3100 },
+      { type: "circle", x: 1200, y: 2500, r: 400 },
+      { type: "circle", x: 1200, y: 4300, r: 300 },
+      { type: "circle", x: 0, y: 4300, r: 400 }
+    ];
+
+    const dirOffsets = [
+      { gx: 0, gy: 1, cost: ASTAR_STRAIGHT_COST },
+      { gx: 1, gy: 1, cost: ASTAR_DIAGONAL_COST },
+      { gx: 1, gy: 0, cost: ASTAR_STRAIGHT_COST },
+      { gx: 1, gy: -1, cost: ASTAR_DIAGONAL_COST },
+      { gx: 0, gy: -1, cost: ASTAR_STRAIGHT_COST },
+      { gx: -1, gy: -1, cost: ASTAR_DIAGONAL_COST },
+      { gx: -1, gy: 0, cost: ASTAR_STRAIGHT_COST },
+      { gx: -1, gy: 1, cost: ASTAR_DIAGONAL_COST }
+    ];
+
+    const el = {
+      brandCanvas: document.getElementById("brandCanvas"),
+      canvas: document.getElementById("simCanvas"),
+      planBtn: document.getElementById("planBtn"),
+      startBtn: document.getElementById("startBtn"),
+      pauseBtn: document.getElementById("pauseBtn"),
+      resetBtn: document.getElementById("resetBtn"),
+      goalX: document.getElementById("goalX"),
+      goalY: document.getElementById("goalY"),
+      statusBox: document.getElementById("statusBox"),
+      showRawPath: document.getElementById("showRawPath"),
+      shortcutEnabled: document.getElementById("shortcutEnabled"),
+      sampleSpacing: document.getElementById("sampleSpacing"),
+      lookaheadDistance: document.getElementById("lookaheadDistance"),
+      maxSpeed: document.getElementById("maxSpeed"),
+      positionKp: document.getElementById("positionKp"),
+      lineCorrectionEnabled: document.getElementById("lineCorrectionEnabled"),
+      lineKp: document.getElementById("lineKp"),
+      lineKd: document.getElementById("lineKd"),
+      decelDistance: document.getElementById("decelDistance"),
+      stopRadius: document.getElementById("stopRadius"),
+      yawFollowTangent: document.getElementById("yawFollowTangent"),
+      fixedYaw: document.getElementById("fixedYaw"),
+      yawKp: document.getElementById("yawKp"),
+      yawRateLimit: document.getElementById("yawRateLimit"),
+      poseText: document.getElementById("poseText"),
+      yawText: document.getElementById("yawText"),
+      targetYawText: document.getElementById("targetYawText"),
+      lookaheadText: document.getElementById("lookaheadText"),
+      projectionText: document.getElementById("projectionText"),
+      crossErrorText: document.getElementById("crossErrorText"),
+      speedText: document.getElementById("speedText"),
+      pathText: document.getElementById("pathText"),
+      indexText: document.getElementById("indexText"),
+      planText: document.getElementById("planText")
+    };
+
+    const ctx = el.canvas.getContext("2d");
+    const brandCtx = el.brandCanvas.getContext("2d");
+
+    const obstacleMap = new Uint8Array(NODE_COUNT);
+
+    const state = {
+      rawPath: [],
+      processedPath: [],
+      trajectory: [],
+      pose: { x: START_X_MM, y: START_Y_MM, yawDeg: 0 },
+      lookahead: null,
+      projection: null,
+      crossError: 0,
+      lastCrossError: { x: 0, y: 0 },
+      hasCrossErrorHistory: false,
+      currentIndex: 0,
+      targetYawDeg: 0,
+      speed: 0,
+      running: false,
+      lastFrameTime: 0,
+      redrawPending: false,
+      planStatus: "未规划"
+    };
+
+    function clamp(value, minValue, maxValue) {
+      return Math.max(minValue, Math.min(maxValue, value));
+    }
+
+    function readNumber(input, fallback, minValue, maxValue) {
+      const value = Number(input.value);
+
+      if (!Number.isFinite(value)) {
+        return fallback;
+      }
+
+      return clamp(value, minValue, maxValue);
+    }
+
+    function normalizeDeg(angleDeg) {
+      let angle = angleDeg;
+
+      while (angle > 180) {
+        angle -= 360;
+      }
+
+      while (angle < -180) {
+        angle += 360;
+      }
+
+      return angle;
+    }
+
+    function mmToGrid(valueMm, maxMm) {
+      return Math.round(clamp(valueMm, 0, maxMm) / MAP_RESOLUTION_MM);
+    }
+
+    function gridToMm(gridValue) {
+      return gridValue * MAP_RESOLUTION_MM;
+    }
+
+    function cellIndex(gridX, gridY) {
+      return (gridY * GRID_X_COUNT) + gridX;
+    }
+
+    function isGridValid(gridX, gridY) {
+      return gridX >= 0 && gridX <= GRID_X_MAX && gridY >= 0 && gridY <= GRID_Y_MAX;
+    }
+
+    function pointToGrid(point) {
+      return {
+        gx: mmToGrid(point.x, MAP_X_MAX_MM),
+        gy: mmToGrid(point.y, MAP_Y_MAX_MM)
+      };
+    }
+
+    function isObstacleGrid(gridX, gridY) {
+      if (!isGridValid(gridX, gridY)) {
+        return true;
+      }
+
+      return obstacleMap[cellIndex(gridX, gridY)] !== 0;
+    }
+
+    function isObstacleMm(xMm, yMm) {
+      return isObstacleGrid(mmToGrid(xMm, MAP_X_MAX_MM), mmToGrid(yMm, MAP_Y_MAX_MM));
+    }
+
+    function rasterizeObstacles() {
+      let gridX = 0;
+      let gridY = 0;
+      let defIndex = 0;
+
+      obstacleMap.fill(0);
+
+      for (gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+        for (gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+          const xMm = gridToMm(gridX);
+          const yMm = gridToMm(gridY);
+          let blocked = false;
+
+          for (defIndex = 0; defIndex < obstacleDefs.length; defIndex += 1) {
+            const def = obstacleDefs[defIndex];
+
+            if (def.type === "rect") {
+              blocked = xMm >= def.xMin && xMm <= def.xMax && yMm >= def.yMin && yMm <= def.yMax;
+            } else {
+              const dx = xMm - def.x;
+              const dy = yMm - def.y;
+              blocked = ((dx * dx) + (dy * dy)) <= (def.r * def.r);
+            }
+
+            if (blocked) {
+              obstacleMap[cellIndex(gridX, gridY)] = 1;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    function updateCanvasBackingSize() {
+      const rect = el.canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const width = Math.max(640, Math.floor(rect.width * ratio));
+      const height = Math.max(360, Math.floor(rect.height * ratio));
+
+      if (el.canvas.width !== width || el.canvas.height !== height) {
+        el.canvas.width = width;
+        el.canvas.height = height;
+        return true;
+      }
+
+      return false;
+    }
+
+    function getMapPlot() {
+      const width = el.canvas.width;
+      const height = el.canvas.height;
+      const padLeft = 58;
+      const padRight = 22;
+      const padTop = 26;
+      const padBottom = 50;
+      const availableW = width - padLeft - padRight;
+      const availableH = height - padTop - padBottom;
+      const mapAspect = MAP_Y_MAX_MM / MAP_X_MAX_MM;
+      let plotW = availableW;
+      let plotH = plotW / mapAspect;
+
+      if (plotH > availableH) {
+        plotH = availableH;
+        plotW = plotH * mapAspect;
+      }
+
+      return {
+        x: padLeft + ((availableW - plotW) * 0.5),
+        y: padTop + ((availableH - plotH) * 0.5),
+        w: plotW,
+        h: plotH
+      };
+    }
+
+    function mapToCanvas(xMm, yMm, plot) {
+      return {
+        x: plot.x + ((MAP_Y_MAX_MM - yMm) / MAP_Y_MAX_MM) * plot.w,
+        y: plot.y + ((MAP_X_MAX_MM - xMm) / MAP_X_MAX_MM) * plot.h
+      };
+    }
+
+    function canvasToMap(canvasX, canvasY, plot) {
+      return {
+        x: MAP_X_MAX_MM - (((canvasY - plot.y) / plot.h) * MAP_X_MAX_MM),
+        y: MAP_Y_MAX_MM - (((canvasX - plot.x) / plot.w) * MAP_Y_MAX_MM)
+      };
+    }
+
+    function mapVectorToCanvas(dx, dy, plot) {
+      return {
+        x: -(dy / MAP_Y_MAX_MM) * plot.w,
+        y: -(dx / MAP_X_MAX_MM) * plot.h
+      };
+    }
+
+    function drawBrand() {
+      brandCtx.clearRect(0, 0, 30, 30);
+      brandCtx.fillStyle = "#ffffff";
+      brandCtx.fillRect(0, 0, 30, 30);
+      brandCtx.fillStyle = "#111111";
+      brandCtx.fillRect(6, 6, 18, 6);
+      brandCtx.fillRect(6, 18, 18, 6);
+      brandCtx.fillStyle = "#1269ff";
+      brandCtx.fillRect(10, 12, 10, 3);
+      brandCtx.fillStyle = "#1f9d71";
+      brandCtx.fillRect(13, 15, 4, 3);
+    }
+
+    function drawGrid(plot) {
+      const ratio = window.devicePixelRatio || 1;
+      const majorXStep = 500 / MAP_RESOLUTION_MM;
+      const majorYStep = 500 / MAP_RESOLUTION_MM;
+      let gridX = 0;
+      let gridY = 0;
+
+      ctx.save();
+      ctx.lineWidth = 1 * ratio;
+      ctx.strokeStyle = getCss("--grid");
+
+      for (gridY = 0; gridY <= GRID_Y_MAX; gridY += majorYStep) {
+        const pos = mapToCanvas(0, gridToMm(gridY), plot);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, plot.y);
+        ctx.lineTo(pos.x, plot.y + plot.h);
+        ctx.stroke();
+      }
+
+      for (gridX = 0; gridX <= GRID_X_MAX; gridX += majorXStep) {
+        const pos = mapToCanvas(gridToMm(gridX), 0, plot);
+        ctx.beginPath();
+        ctx.moveTo(plot.x, pos.y);
+        ctx.lineTo(plot.x + plot.w, pos.y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawAxes(plot) {
+      const ratio = window.devicePixelRatio || 1;
+
+      ctx.save();
+      ctx.strokeStyle = getCss("--axis");
+      ctx.fillStyle = getCss("--ink");
+      ctx.lineWidth = 2 * ratio;
+      ctx.font = `${12 * ratio}px Microsoft YaHei, Segoe UI, Arial`;
+      ctx.strokeRect(plot.x, plot.y, plot.w, plot.h);
+      ctx.fillText("上 x=2500", plot.x + 8 * ratio, plot.y - 8 * ratio);
+      ctx.fillText("下 x=0", plot.x + 8 * ratio, plot.y + plot.h - 8 * ratio);
+      ctx.fillText("左 y=5000", plot.x + 8 * ratio, plot.y + plot.h + 24 * ratio);
+      ctx.fillText("右 y=0", plot.x + plot.w - 70 * ratio, plot.y + plot.h + 24 * ratio);
+      ctx.restore();
+    }
+
+    function drawObstacles(plot) {
+      const cellW = plot.w / GRID_Y_MAX;
+      const cellH = plot.h / GRID_X_MAX;
+      let gridX = 0;
+      let gridY = 0;
+
+      ctx.save();
+      ctx.fillStyle = getCss("--obstacle");
+      for (gridY = 0; gridY < GRID_Y_COUNT; gridY += 1) {
+        for (gridX = 0; gridX < GRID_X_COUNT; gridX += 1) {
+          if (obstacleMap[cellIndex(gridX, gridY)] !== 0) {
+            const pos = mapToCanvas(gridToMm(gridX), gridToMm(gridY), plot);
+            ctx.fillRect(pos.x - (cellW * 0.5), pos.y - (cellH * 0.5), Math.max(2, cellW), Math.max(2, cellH));
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawStartZone(plot) {
+      const ratio = window.devicePixelRatio || 1;
+      const half = START_ZONE_SIZE_MM * 0.5;
+      const topLeft = mapToCanvas(START_X_MM + half, START_Y_MM + half, plot);
+      const bottomRight = mapToCanvas(START_X_MM - half, START_Y_MM - half, plot);
+
+      ctx.save();
+      ctx.fillStyle = getCss("--start-zone-fill");
+      ctx.strokeStyle = getCss("--start-zone");
+      ctx.lineWidth = 2 * ratio;
+      ctx.setLineDash([8 * ratio, 5 * ratio]);
+      ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+      ctx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+      ctx.setLineDash([]);
+      ctx.fillStyle = getCss("--start-zone");
+      ctx.font = `${12 * ratio}px Microsoft YaHei, Segoe UI, Arial`;
+      ctx.fillText("出发区", topLeft.x + 8 * ratio, topLeft.y + 18 * ratio);
+      ctx.restore();
+    }
+
+    function drawPoint(xMm, yMm, plot, color, radiusPx, strokeOnly) {
+      const pos = mapToCanvas(xMm, yMm, plot);
+
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2 * (window.devicePixelRatio || 1);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, radiusPx, 0, Math.PI * 2);
+      if (strokeOnly) {
+        ctx.stroke();
+      } else {
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawPolyline(points, plot, color, widthPx, dash) {
+      if (points.length < 2) {
+        return;
+      }
+
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = widthPx;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      if (dash) {
+        ctx.setLineDash(dash);
+      }
+      ctx.beginPath();
+      points.forEach((point, index) => {
+        const pos = mapToCanvas(point.x, point.y, plot);
+        if (index === 0) {
+          ctx.moveTo(pos.x, pos.y);
+        } else {
+          ctx.lineTo(pos.x, pos.y);
+        }
+      });
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPathPoints(points, plot, color, radiusPx) {
+      points.forEach((point) => {
+        drawPoint(point.x, point.y, plot, color, radiusPx, false);
+      });
+    }
+
+    function drawCar(plot) {
+      const ratio = window.devicePixelRatio || 1;
+      const pos = mapToCanvas(state.pose.x, state.pose.y, plot);
+      const yawRad = state.pose.yawDeg * Math.PI / 180;
+      const heading = mapVectorToCanvas(Math.cos(yawRad) * 90, Math.sin(yawRad) * 90, plot);
+
+      ctx.save();
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = getCss("--accent");
+      ctx.lineWidth = 3 * ratio;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 13 * ratio, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = getCss("--target");
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      ctx.lineTo(pos.x + heading.x, pos.y + heading.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawScene() {
+      updateCanvasBackingSize();
+
+      const width = el.canvas.width;
+      const height = el.canvas.height;
+      const plot = getMapPlot();
+      const ratio = window.devicePixelRatio || 1;
+      const goal = readGoal();
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = getCss("--field");
+      ctx.fillRect(plot.x, plot.y, plot.w, plot.h);
+
+      drawGrid(plot);
+      drawStartZone(plot);
+      drawObstacles(plot);
+
+      if (el.showRawPath.checked) {
+        drawPolyline(state.rawPath, plot, getCss("--raw-path"), 2 * ratio, [7 * ratio, 5 * ratio]);
+      }
+
+      drawPolyline(state.processedPath, plot, getCss("--path"), 3 * ratio);
+      drawPathPoints(state.processedPath, plot, getCss("--path"), 2.4 * ratio);
+      drawPolyline(state.trajectory, plot, getCss("--trajectory"), 2 * ratio);
+
+      if (state.lookahead) {
+        drawPoint(state.lookahead.x, state.lookahead.y, plot, getCss("--lookahead"), 6 * ratio, false);
+      }
+
+      if (state.projection) {
+        drawPoint(state.projection.x, state.projection.y, plot, getCss("--projection"), 5 * ratio, false);
+      }
+
+      drawPoint(START_X_MM, START_Y_MM, plot, getCss("--start-zone"), 6 * ratio, false);
+      drawPoint(goal.x, goal.y, plot, getCss("--target"), 8 * ratio, true);
+      drawCar(plot);
+      drawAxes(plot);
+    }
+
+    function requestRedraw() {
+      if (state.redrawPending) {
+        return;
+      }
+
+      state.redrawPending = true;
+      requestAnimationFrame(() => {
+        state.redrawPending = false;
+        drawScene();
+      });
+    }
+
+    function heuristic(gridX, gridY, goalX, goalY) {
+      const dx = Math.abs(goalX - gridX);
+      const dy = Math.abs(goalY - gridY);
+      const minDelta = Math.min(dx, dy);
+      const maxDelta = Math.max(dx, dy);
+
+      return (ASTAR_DIAGONAL_COST * minDelta) + (ASTAR_STRAIGHT_COST * (maxDelta - minDelta));
+    }
+
+    function canStep(currentX, currentY, offsetX, offsetY) {
+      const nextX = currentX + offsetX;
+      const nextY = currentY + offsetY;
+
+      if (!isGridValid(nextX, nextY) || isObstacleGrid(nextX, nextY)) {
+        return false;
+      }
+
+      if (offsetX !== 0 && offsetY !== 0) {
+        if (isObstacleGrid(currentX + offsetX, currentY) || isObstacleGrid(currentX, currentY + offsetY)) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    function popBestOpen(openList, gCost, goalX, goalY) {
+      let bestPos = 0;
+      let bestScore = INF_COST;
+      let index = 0;
+
+      for (index = 0; index < openList.length; index += 1) {
+        const nodeIndex = openList[index];
+        const gridX = nodeIndex % GRID_X_COUNT;
+        const gridY = Math.floor(nodeIndex / GRID_X_COUNT);
+        const score = gCost[nodeIndex] + heuristic(gridX, gridY, goalX, goalY);
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestPos = index;
+        }
+      }
+
+      const bestIndex = openList[bestPos];
+      openList[bestPos] = openList[openList.length - 1];
+      openList.pop();
+      return bestIndex;
+    }
+
+    function reconstructPath(parent, startIndex, goalIndex) {
+      const reverse = [];
+      let current = goalIndex;
+      let guard = 0;
+
+      while (current >= 0 && guard < NODE_COUNT) {
+        const gridX = current % GRID_X_COUNT;
+        const gridY = Math.floor(current / GRID_X_COUNT);
+        reverse.push({ x: gridToMm(gridX), y: gridToMm(gridY) });
+        if (current === startIndex) {
+          break;
+        }
+        current = parent[current];
+        guard += 1;
+      }
+
+      return reverse.reverse();
+    }
+
+    function findAstarPath(start, goal) {
+      const startGrid = pointToGrid(start);
+      const goalGrid = pointToGrid(goal);
+      const startIndex = cellIndex(startGrid.gx, startGrid.gy);
+      const goalIndex = cellIndex(goalGrid.gx, goalGrid.gy);
+      const nodeState = new Uint8Array(NODE_COUNT);
+      const gCost = new Int32Array(NODE_COUNT);
+      const parent = new Int32Array(NODE_COUNT);
+      const openList = [];
+
+      if (isObstacleGrid(startGrid.gx, startGrid.gy)) {
+        return { ok: false, reason: "起点在障碍区内" };
+      }
+
+      if (isObstacleGrid(goalGrid.gx, goalGrid.gy)) {
+        return { ok: false, reason: "目标点在障碍区内" };
+      }
+
+      gCost.fill(INF_COST);
+      parent.fill(-1);
+      gCost[startIndex] = 0;
+      nodeState[startIndex] = STATE_OPEN;
+      openList.push(startIndex);
+
+      while (openList.length > 0) {
+        const currentIndex = popBestOpen(openList, gCost, goalGrid.gx, goalGrid.gy);
+        const currentX = currentIndex % GRID_X_COUNT;
+        const currentY = Math.floor(currentIndex / GRID_X_COUNT);
+        let dirIndex = 0;
+
+        if (currentIndex === goalIndex) {
+          return { ok: true, path: reconstructPath(parent, startIndex, goalIndex) };
+        }
+
+        nodeState[currentIndex] = STATE_CLOSED;
+
+        for (dirIndex = 0; dirIndex < dirOffsets.length; dirIndex += 1) {
+          const dir = dirOffsets[dirIndex];
+
+          if (!canStep(currentX, currentY, dir.gx, dir.gy)) {
+            continue;
+          }
+
+          const nextX = currentX + dir.gx;
+          const nextY = currentY + dir.gy;
+          const nextIndex = cellIndex(nextX, nextY);
+
+          if (nodeState[nextIndex] === STATE_CLOSED) {
+            continue;
+          }
+
+          const tentativeCost = gCost[currentIndex] + dir.cost;
+          if (nodeState[nextIndex] === STATE_NONE || tentativeCost < gCost[nextIndex]) {
+            parent[nextIndex] = currentIndex;
+            gCost[nextIndex] = tentativeCost;
+            if (nodeState[nextIndex] === STATE_NONE) {
+              nodeState[nextIndex] = STATE_OPEN;
+              openList.push(nextIndex);
+            }
+          }
+        }
+      }
+
+      return { ok: false, reason: "未找到可通行路径" };
+    }
+
+    function samePoint(a, b) {
+      return Math.round(a.x) === Math.round(b.x) && Math.round(a.y) === Math.round(b.y);
+    }
+
+    function pushUnique(points, point) {
+      const rounded = { x: Math.round(point.x), y: Math.round(point.y) };
+      const last = points[points.length - 1];
+
+      if (!last || !samePoint(last, rounded)) {
+        points.push(rounded);
+      }
+    }
+
+    function isGridLineOfSightClear(startGrid, endGrid) {
+      let gridX = startGrid.gx;
+      let gridY = startGrid.gy;
+      const endX = endGrid.gx;
+      const endY = endGrid.gy;
+      const deltaX = endX - gridX;
+      const deltaY = endY - gridY;
+      const stepX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
+      const stepY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
+      const absDeltaX = Math.abs(deltaX);
+      const absDeltaY = Math.abs(deltaY);
+      const tDeltaX = absDeltaX > 0 ? 1 / absDeltaX : Number.POSITIVE_INFINITY;
+      const tDeltaY = absDeltaY > 0 ? 1 / absDeltaY : Number.POSITIVE_INFINITY;
+      let tMaxX = absDeltaX > 0 ? 0.5 / absDeltaX : Number.POSITIVE_INFINITY;
+      let tMaxY = absDeltaY > 0 ? 0.5 / absDeltaY : Number.POSITIVE_INFINITY;
+
+      if (isObstacleGrid(gridX, gridY) || isObstacleGrid(endX, endY)) {
+        return false;
+      }
+
+      while (gridX !== endX || gridY !== endY) {
+        if (tMaxX < tMaxY) {
+          gridX += stepX;
+          tMaxX += tDeltaX;
+        } else if (tMaxY < tMaxX) {
+          gridY += stepY;
+          tMaxY += tDeltaY;
+        } else {
+          if (isObstacleGrid(gridX + stepX, gridY) || isObstacleGrid(gridX, gridY + stepY)) {
+            return false;
+          }
+          gridX += stepX;
+          gridY += stepY;
+          tMaxX += tDeltaX;
+          tMaxY += tDeltaY;
+        }
+
+        if (isObstacleGrid(gridX, gridY)) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    function isLineOfSightClear(start, end) {
+      return isGridLineOfSightClear(pointToGrid(start), pointToGrid(end));
+    }
+
+    function shortcutPathByLineOfSight(points) {
+      const pruned = [];
+      let anchorIndex = 0;
+
+      if (points.length <= 2) {
+        return points.slice();
+      }
+
+      pushUnique(pruned, points[0]);
+      while (anchorIndex < (points.length - 1)) {
+        let candidateIndex = points.length - 1;
+
+        while ((candidateIndex > (anchorIndex + 1)) &&
+               !isLineOfSightClear(points[anchorIndex], points[candidateIndex])) {
+          candidateIndex -= 1;
+        }
+
+        pushUnique(pruned, points[candidateIndex]);
+        anchorIndex = candidateIndex;
+      }
+
+      return pruned;
+    }
+
+    function resamplePath(points, spacingMm) {
+      const resampled = [];
+      let segmentIndex = 0;
+      let totalDistance = 0;
+      let nextSampleDistance = spacingMm;
+
+      if (points.length <= 1) {
+        return points.slice();
+      }
+
+      pushUnique(resampled, points[0]);
+
+      for (segmentIndex = 1; segmentIndex < points.length; segmentIndex += 1) {
+        const start = points[segmentIndex - 1];
+        const end = points[segmentIndex];
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const segmentLength = Math.hypot(dx, dy);
+
+        if (segmentLength <= 0) {
+          continue;
+        }
+
+        while ((totalDistance + segmentLength) >= nextSampleDistance) {
+          const t = (nextSampleDistance - totalDistance) / segmentLength;
+          pushUnique(resampled, {
+            x: start.x + (dx * t),
+            y: start.y + (dy * t)
+          });
+          nextSampleDistance += spacingMm;
+        }
+
+        totalDistance += segmentLength;
+      }
+
+      pushUnique(resampled, points[points.length - 1]);
+      return resampled;
+    }
+
+    function processCurrentPath() {
+      let points = state.rawPath.slice();
+      const spacing = readNumber(el.sampleSpacing, 40, 20, 300);
+
+      if (points.length === 0) {
+        state.processedPath = [];
+        return;
+      }
+
+      if (el.shortcutEnabled.checked) {
+        points = shortcutPathByLineOfSight(points);
+      }
+
+      state.processedPath = resamplePath(points, spacing);
+    }
+
+    function readGoal() {
+      return {
+        x: readNumber(el.goalX, 1940, 0, MAP_X_MAX_MM),
+        y: readNumber(el.goalY, 1180, 0, MAP_Y_MAX_MM)
+      };
+    }
+
+    function setStatus(message, kind) {
+      el.statusBox.textContent = message;
+      el.statusBox.classList.remove("ok", "bad");
+      if (kind) {
+        el.statusBox.classList.add(kind);
+      }
+    }
+
+    function resetCar() {
+      state.running = false;
+      state.pose = { x: START_X_MM, y: START_Y_MM, yawDeg: readNumber(el.fixedYaw, 0, -180, 180) };
+      state.lookahead = null;
+      state.projection = null;
+      state.crossError = 0;
+      state.lastCrossError = { x: 0, y: 0 };
+      state.hasCrossErrorHistory = false;
+      state.currentIndex = 0;
+      state.targetYawDeg = readNumber(el.fixedYaw, 0, -180, 180);
+      state.speed = 0;
+      state.trajectory = [{ x: state.pose.x, y: state.pose.y }];
+      state.lastFrameTime = 0;
+      el.startBtn.disabled = state.processedPath.length < 2;
+      el.pauseBtn.disabled = true;
+      updateMetrics();
+      requestRedraw();
+    }
+
+    function planPath() {
+      const start = { x: START_X_MM, y: START_Y_MM };
+      const goal = readGoal();
+      const result = findAstarPath(start, goal);
+
+      pauseSimulation();
+      state.rawPath = [];
+      state.processedPath = [];
+      state.lookahead = null;
+
+      if (!result.ok) {
+        state.planStatus = result.reason;
+        setStatus(result.reason, "bad");
+        el.startBtn.disabled = true;
+        updateMetrics();
+        requestRedraw();
+        return;
+      }
+
+      state.rawPath = result.path;
+      processCurrentPath();
+      state.planStatus = "规划完成";
+      setStatus(`规划完成：原始 ${state.rawPath.length} 点，跟踪 ${state.processedPath.length} 点`, "ok");
+      resetCar();
+    }
+
+    function refreshProcessedPath() {
+      if (state.rawPath.length === 0) {
+        requestRedraw();
+        return;
+      }
+
+      pauseSimulation();
+      processCurrentPath();
+      setStatus(`路径参数已更新：跟踪 ${state.processedPath.length} 点`, "ok");
+      resetCar();
+    }
+
+    function pauseSimulation() {
+      state.running = false;
+      el.startBtn.disabled = state.processedPath.length < 2;
+      el.pauseBtn.disabled = true;
+    }
+
+    function startSimulation() {
+      if (state.processedPath.length < 2) {
+        setStatus("请先规划路径", "bad");
+        return;
+      }
+
+      state.running = true;
+      state.lastFrameTime = 0;
+      el.startBtn.disabled = true;
+      el.pauseBtn.disabled = false;
+      requestAnimationFrame(animationFrame);
+    }
+
+    function findNearestIndex() {
+      const path = state.processedPath;
+      const startIndex = clamp(state.currentIndex, 0, Math.max(0, path.length - 1));
+      const endIndex = Math.min(path.length - 1, startIndex + 80);
+      let bestIndex = startIndex;
+      let bestDistSq = Number.POSITIVE_INFINITY;
+      let index = startIndex;
+
+      for (index = startIndex; index <= endIndex; index += 1) {
+        const dx = path[index].x - state.pose.x;
+        const dy = path[index].y - state.pose.y;
+        const distSq = (dx * dx) + (dy * dy);
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          bestIndex = index;
+        }
+      }
+
+      return bestIndex;
+    }
+
+    function projectPoseToSegment(start, end) {
+      const segmentX = end.x - start.x;
+      const segmentY = end.y - start.y;
+      const poseX = state.pose.x - start.x;
+      const poseY = state.pose.y - start.y;
+      const segmentLenSq = (segmentX * segmentX) + (segmentY * segmentY);
+      let t = 0;
+
+      if (segmentLenSq > 0) {
+        t = clamp(((poseX * segmentX) + (poseY * segmentY)) / segmentLenSq, 0, 1);
+      }
+
+      return {
+        x: start.x + (segmentX * t),
+        y: start.y + (segmentY * t),
+        t
+      };
+    }
+
+    function findNearestProjection() {
+      const path = state.processedPath;
+      const startIndex = clamp(state.currentIndex, 0, Math.max(0, path.length - 2));
+      const endIndex = Math.min(path.length - 2, startIndex + 80);
+      let bestProjection = null;
+      let bestIndex = startIndex;
+      let bestDistSq = Number.POSITIVE_INFINITY;
+      let index = startIndex;
+
+      if (path.length < 2) {
+        return {
+          point: null,
+          segmentIndex: 0,
+          distance: 0
+        };
+      }
+
+      for (index = startIndex; index <= endIndex; index += 1) {
+        const projection = projectPoseToSegment(path[index], path[index + 1]);
+        const dx = projection.x - state.pose.x;
+        const dy = projection.y - state.pose.y;
+        const distSq = (dx * dx) + (dy * dy);
+
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          bestProjection = projection;
+          bestIndex = index;
+        }
+      }
+
+      return {
+        point: bestProjection,
+        segmentIndex: bestIndex,
+        distance: Math.sqrt(bestDistSq)
+      };
+    }
+
+    function findLookaheadPoint(startIndex, lookaheadDistance) {
+      const path = state.processedPath;
+      let distance = 0;
+      let index = startIndex + 1;
+
+      if (path.length === 0) {
+        return { point: null, segmentIndex: 0 };
+      }
+
+      for (index = startIndex + 1; index < path.length; index += 1) {
+        const previous = path[index - 1];
+        const current = path[index];
+        const segment = Math.hypot(current.x - previous.x, current.y - previous.y);
+
+        if ((distance + segment) >= lookaheadDistance && segment > 0) {
+          const t = (lookaheadDistance - distance) / segment;
+          return {
+            point: {
+              x: previous.x + ((current.x - previous.x) * t),
+              y: previous.y + ((current.y - previous.y) * t)
+            },
+            segmentIndex: index - 1
+          };
+        }
+
+        distance += segment;
+      }
+
+      return { point: path[path.length - 1], segmentIndex: Math.max(0, path.length - 2) };
+    }
+
+    function getTangentYawDeg(segmentIndex) {
+      const path = state.processedPath;
+      let index = clamp(segmentIndex, 0, Math.max(0, path.length - 2));
+
+      while (index < path.length - 1) {
+        const dx = path[index + 1].x - path[index].x;
+        const dy = path[index + 1].y - path[index].y;
+        if (Math.hypot(dx, dy) > 1) {
+          return Math.atan2(dy, dx) * 180 / Math.PI;
+        }
+        index += 1;
+      }
+
+      return state.targetYawDeg;
+    }
+
+    function appendTrajectoryPoint() {
+      const last = state.trajectory[state.trajectory.length - 1];
+      const dx = state.pose.x - last.x;
+      const dy = state.pose.y - last.y;
+
+      if (Math.hypot(dx, dy) >= 8) {
+        state.trajectory.push({ x: state.pose.x, y: state.pose.y });
+      }
+
+      if (state.trajectory.length > 1200) {
+        state.trajectory.shift();
+      }
+    }
+
+    function stepSimulation(dt) {
+      const path = state.processedPath;
+      const goal = path[path.length - 1];
+      const goalDist = Math.hypot(goal.x - state.pose.x, goal.y - state.pose.y);
+      const stopRadius = readNumber(el.stopRadius, 80, 20, 200);
+      const maxSpeed = readNumber(el.maxSpeed, 100, 10, 600);
+      const decelDistance = readNumber(el.decelDistance, 300, 100, 1200);
+      const lookaheadDistance = readNumber(el.lookaheadDistance, 180, 80, 500);
+      const positionKp = readNumber(el.positionKp, 1.0, 0.1, 5);
+      const projectionResult = findNearestProjection();
+      const nearestIndex = projectionResult.segmentIndex;
+      const lookaheadResult = findLookaheadPoint(nearestIndex, lookaheadDistance);
+      let speedLimit = maxSpeed;
+      let vx = 0;
+      let vy = 0;
+      let speed = 0;
+      let crossErrorX = 0;
+      let crossErrorY = 0;
+
+      state.currentIndex = Math.max(state.currentIndex, nearestIndex);
+      state.lookahead = lookaheadResult.point;
+      state.projection = projectionResult.point;
+      state.crossError = projectionResult.distance;
+
+      if (goalDist <= stopRadius) {
+        state.pose.x = goal.x;
+        state.pose.y = goal.y;
+        state.speed = 0;
+        state.running = false;
+        state.planStatus = "已到达";
+        setStatus("已到达终点", "ok");
+        el.startBtn.disabled = false;
+        el.pauseBtn.disabled = true;
+        return;
+      }
+
+      if (goalDist < decelDistance) {
+        speedLimit = maxSpeed * clamp(goalDist / decelDistance, 0.15, 1);
+      }
+
+      if (state.lookahead) {
+        vx = (state.lookahead.x - state.pose.x) * positionKp;
+        vy = (state.lookahead.y - state.pose.y) * positionKp;
+      }
+
+      if (state.projection) {
+        crossErrorX = state.projection.x - state.pose.x;
+        crossErrorY = state.projection.y - state.pose.y;
+        if (el.lineCorrectionEnabled.checked) {
+          const lineKp = readNumber(el.lineKp, 0.3, 0, 5);
+          const lineKd = readNumber(el.lineKd, 0.05, 0, 2);
+          let derivativeX = 0;
+          let derivativeY = 0;
+
+          if (state.hasCrossErrorHistory) {
+            derivativeX = (crossErrorX - state.lastCrossError.x) / dt;
+            derivativeY = (crossErrorY - state.lastCrossError.y) / dt;
+          }
+
+          vx += (lineKp * crossErrorX) + (lineKd * derivativeX);
+          vy += (lineKp * crossErrorY) + (lineKd * derivativeY);
+        }
+
+        state.lastCrossError = { x: crossErrorX, y: crossErrorY };
+        state.hasCrossErrorHistory = true;
+      } else {
+        state.hasCrossErrorHistory = false;
+      }
+
+      speed = Math.hypot(vx, vy);
+      if (speed > speedLimit && speed > 0) {
+        vx = (vx / speed) * speedLimit;
+        vy = (vy / speed) * speedLimit;
+        speed = speedLimit;
+      }
+
+      state.pose.x = clamp(state.pose.x + (vx * dt), 0, MAP_X_MAX_MM);
+      state.pose.y = clamp(state.pose.y + (vy * dt), 0, MAP_Y_MAX_MM);
+      state.speed = speed;
+
+      if (el.yawFollowTangent.checked) {
+        state.targetYawDeg = getTangentYawDeg(lookaheadResult.segmentIndex);
+      } else {
+        state.targetYawDeg = readNumber(el.fixedYaw, 0, -180, 180);
+      }
+
+      const yawError = normalizeDeg(state.targetYawDeg - state.pose.yawDeg);
+      const yawKp = readNumber(el.yawKp, 2.0, 0.1, 8);
+      const yawRateLimit = readNumber(el.yawRateLimit, 90, 10, 360);
+      const yawRate = clamp(yawError * yawKp, -yawRateLimit, yawRateLimit);
+      state.pose.yawDeg = normalizeDeg(state.pose.yawDeg + (yawRate * dt));
+
+      appendTrajectoryPoint();
+    }
+
+    function animationFrame(timestamp) {
+      if (!state.running) {
+        return;
+      }
+
+      if (state.lastFrameTime === 0) {
+        state.lastFrameTime = timestamp;
+      }
+
+      const dt = clamp((timestamp - state.lastFrameTime) / 1000, 0.001, 0.05);
+      state.lastFrameTime = timestamp;
+      stepSimulation(dt);
+      updateMetrics();
+      drawScene();
+
+      if (state.running) {
+        requestAnimationFrame(animationFrame);
+      }
+    }
+
+    function updateMetrics() {
+      const lookahead = state.lookahead;
+      const projection = state.projection;
+
+      el.poseText.textContent = `${Math.round(state.pose.x)},${Math.round(state.pose.y)}`;
+      el.yawText.textContent = `${state.pose.yawDeg.toFixed(1)}deg`;
+      el.targetYawText.textContent = `${state.targetYawDeg.toFixed(1)}deg`;
+      el.lookaheadText.textContent = lookahead ? `${Math.round(lookahead.x)},${Math.round(lookahead.y)}` : "-";
+      el.projectionText.textContent = projection ? `${Math.round(projection.x)},${Math.round(projection.y)}` : "-";
+      el.crossErrorText.textContent = `${state.crossError.toFixed(1)}mm`;
+      el.speedText.textContent = `${state.speed.toFixed(1)}mm/s`;
+      el.pathText.textContent = `${state.rawPath.length} / ${state.processedPath.length}`;
+      el.indexText.textContent = String(state.currentIndex);
+      el.planText.textContent = state.planStatus;
+    }
+
+    function getCss(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function handleCanvasClick(event) {
+      const rect = el.canvas.getBoundingClientRect();
+      const ratioX = el.canvas.width / rect.width;
+      const ratioY = el.canvas.height / rect.height;
+      const canvasX = (event.clientX - rect.left) * ratioX;
+      const canvasY = (event.clientY - rect.top) * ratioY;
+      const plot = getMapPlot();
+
+      if (canvasX < plot.x || canvasX > (plot.x + plot.w) || canvasY < plot.y || canvasY > (plot.y + plot.h)) {
+        return;
+      }
+
+      const point = canvasToMap(canvasX, canvasY, plot);
+      const gridX = mmToGrid(point.x, MAP_X_MAX_MM);
+      const gridY = mmToGrid(point.y, MAP_Y_MAX_MM);
+      const goalX = gridToMm(gridX);
+      const goalY = gridToMm(gridY);
+
+      el.goalX.value = String(goalX);
+      el.goalY.value = String(goalY);
+      setStatus(`目标点已更新：${goalX},${goalY}`, isObstacleMm(goalX, goalY) ? "bad" : "ok");
+      requestRedraw();
+    }
+
+    function attachEvents() {
+      el.planBtn.addEventListener("click", planPath);
+      el.startBtn.addEventListener("click", startSimulation);
+      el.pauseBtn.addEventListener("click", () => {
+        pauseSimulation();
+        setStatus("仿真已暂停", "");
+        updateMetrics();
+      });
+      el.resetBtn.addEventListener("click", () => {
+        resetCar();
+        setStatus("小车已复位到出发区中心", "");
+      });
+      el.canvas.addEventListener("click", handleCanvasClick);
+      window.addEventListener("resize", requestRedraw);
+
+      [
+        el.shortcutEnabled,
+        el.sampleSpacing
+      ].forEach((control) => {
+        control.addEventListener("input", refreshProcessedPath);
+        control.addEventListener("change", refreshProcessedPath);
+      });
+
+      [
+        el.showRawPath
+      ].forEach((control) => {
+        control.addEventListener("input", requestRedraw);
+        control.addEventListener("change", requestRedraw);
+      });
+
+      [
+        el.goalX,
+        el.goalY,
+        el.fixedYaw
+      ].forEach((control) => {
+        control.addEventListener("input", () => {
+          pauseSimulation();
+          requestRedraw();
+          updateMetrics();
+        });
+      });
+    }
+
+    function init() {
+      drawBrand();
+      rasterizeObstacles();
+      attachEvents();
+      resetCar();
+      planPath();
+      updateMetrics();
+      requestRedraw();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,24 +1,30 @@
 /**
  * @file    ble_adaption.c
- * @brief   BLE 平台适配层（STM32 HAL USART1 + DMA 空闲接收）
+ * @brief   BLE 平台适配层（STM32 HAL USART1 收发）
  * @author  haoyu
- * @note    - USART1 经 g_uart 收；DMA 空闲中断接收，关半传输
+ * @note    - USART1 用 DMA 空闲接收；printf 按行缓冲发送
  *          - ISR 只拷帧上抛 + 重启；拆帧换算放任务侧 process
  *          - 协议量→物理量（deg→rad）在 on_frame 换算后上抛
  */
 
 #include "ble_adaption.h"
 
+#include <stdio.h>
+
 #include "main.h"
 #include "usart.h"
 
 #define BLE_RX_BUF_SIZE  64U          /* USART1 DMA 接收缓冲字节数 */
+#define BLE_TX_BUF_SIZE  96U          /* printf 单次缓冲字节数 */
+#define BLE_TX_TIMEOUT   10U          /* USART1 阻塞发送超时 ms */
 #define BLE_DEG2RAD      0.0174532925f /* 角度转弧度系数 */
 
-static UART_HandleTypeDef *const g_uart = &huart1; /* BLE 接收 UART */
+static UART_HandleTypeDef *const g_uart = &huart1; /* BLE 收发 UART */
 
 static ble_parser_t  g_parser;                  /* 解析器实例 */
 static uint8_t       g_rx_buf[BLE_RX_BUF_SIZE]; /* DMA 接收缓冲 */
+static uint8_t       g_tx_buf[BLE_TX_BUF_SIZE]; /* printf 行缓冲 */
+static uint16_t      g_tx_len = 0U;             /* 当前已缓冲字节数 */
 static ble_rx_cb_t   g_on_rx_raw = NULL;        /* 原始块回调 */
 static ble_nav_out_t g_on_nav    = NULL;        /* 命令上抛回调 */
 static uint8_t       g_inited    = 0U;          /* 是否已实例化 */
@@ -40,6 +46,22 @@ static ble_status_t start_rx(void)
 }
 
 /**
+ * @brief  将 printf 缓冲行发送到 BLE USART1
+ * @retval 0 或 EOF
+ */
+static int flush_tx(void)
+{
+    HAL_StatusTypeDef ret = HAL_OK; /* UART 发送结果 */
+
+    if (g_tx_len == 0U) {
+        return 0;
+    }
+    ret = HAL_UART_Transmit(g_uart, g_tx_buf, g_tx_len, BLE_TX_TIMEOUT);
+    g_tx_len = 0U;
+    return (ret == HAL_OK) ? 0 : EOF;
+}
+
+/**
  * @brief  解析器整帧回调：协议量换算为物理量后上抛
  * @param  ctx 未用
  * @param  nav 解析出的导航命令（原始量）
@@ -58,6 +80,30 @@ static void on_frame(void *ctx, const ble_nav_t *nav)
 }
 
 /* ---- 对外接口 ---- */
+
+/**
+ * @brief  将标准输出重定向到 BLE USART1，按行批量发送
+ * @param  ch     待输出字符
+ * @param  stream 标准流，本实现未使用
+ * @retval ch 或 EOF
+ */
+int fputc(int ch, FILE *stream)
+{
+    (void)stream;
+    if (g_tx_len >= BLE_TX_BUF_SIZE) {
+        if (flush_tx() == EOF) {
+            return EOF;
+        }
+    }
+    g_tx_buf[g_tx_len] = (uint8_t)ch;
+    g_tx_len++;
+    if ((ch == '\n') || (g_tx_len >= BLE_TX_BUF_SIZE)) {
+        if (flush_tx() == EOF) {
+            return EOF;
+        }
+    }
+    return ch;
+}
 
 ble_status_t ble_adp_init(ble_rx_cb_t on_rx_raw, ble_nav_out_t on_nav)
 {

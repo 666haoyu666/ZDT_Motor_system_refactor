@@ -25,7 +25,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "system_assembly.h"
+#include "app_main.h"
+
+#include "usart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -154,7 +156,17 @@ void Main_task(void *argument)
 {
   /* USER CODE BEGIN Main_task */
   /* 调度器已运行，组装并启动各子系统（电机 + 陀螺仪），仅一次 */
-  (void)system_assembly_init();
+  uint8_t cmd[5] = {0xFF, 0xAA, 0x69, 0x88, 0xB5};
+	HAL_UART_Transmit(&huart2, cmd, 5,100);
+	osDelay(210);
+	cmd[2] = 0x76;
+	cmd[3] = 0x00;
+	cmd[4] = 0x00;
+	HAL_UART_Transmit(&huart2, cmd, 5,100);
+	cmd[2] = 0x00;
+	osDelay(510);
+	HAL_UART_Transmit(&huart2, cmd, 5,100);
+  (void)app_init();
   /* Infinite loop */
   for(;;)
   {

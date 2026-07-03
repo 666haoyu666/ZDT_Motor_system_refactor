@@ -21,7 +21,7 @@
 #define MEC_YAW_TOL_RAD     0.0349066f /* 航向到位容差，约 2°，rad */
 #define MEC_LIN_STEP        10.0f      /* 线速度每周期步长，mm/s */
 #define MEC_ANG_STEP        0.05f      /* 角速度每周期步长，rad/s */
-#define MEC_LIN_DECEL       100.0f     /* 线减速度，mm/s^2 */
+#define MEC_LIN_DECEL       300.0f     /* 线减速度，mm/s^2 */
 #define MEC_ANG_DECEL       1.0f       /* 角减速度，rad/s^2 */
 #define MEC_LOOK_DIST_MM    250.0f     /* 路径前瞻距离，mm */
 #define MEC_CUR_DIST_MM     100.0f     /* 路径当前点判定距离，mm */
